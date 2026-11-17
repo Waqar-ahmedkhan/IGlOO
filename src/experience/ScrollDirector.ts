@@ -108,6 +108,7 @@ export const scrollDirector = {
   autoEnabled: true,
   autoWeight: 1,
   idleElapsed: 3.5,
+  reverseReady: false,
 
   setPaused(paused: boolean) {
     this.paused = paused;
@@ -150,52 +151,76 @@ export const scrollDirector = {
     this.direction = nextDirection;
   },
 
-  applyWheelImpulse(deltaY: number) {
+  enterReverseLoop(amount: number) {
+    if (this.paused || !this.reverseReady) return;
+    this.scrollProgress = EXPERIENCE_MAX_SCROLL;
+    this.targetScroll = EXPERIENCE_MAX_SCROLL;
+    this.velocity = 0;
+    this.direction = -1;
+    this.loopTransitioning = false;
+    this.loopProgress = 0.985;
+    this.loopTarget = clamp(0.985 - Math.abs(amount), 0, 0.985);
+    this.stateName = classifyScrollState(EXPERIENCE_MAX_SCROLL);
+    syncSnapshot();
+  },
+
+  stepLoopTarget(loopDelta: number, handoffThreshold: number): boolean {
+    this.loopTransitioning = false;
+    const nextLoopTarget = this.loopTarget + loopDelta;
+    if (nextLoopTarget <= 0 && loopDelta < 0) {
+      this.loopTarget = 0;
+      if (this.loopProgress <= handoffThreshold) {
+        this.loopProgress = 0;
+        return false;
+      }
+      return true;
+    }
+    this.loopTarget = clamp(nextLoopTarget, 0, 1.05);
+    if (this.loopTarget >= 0.96 && loopDelta > 0) {
+      this.loopTransitioning = true;
+      this.loopTarget = 1.05;
+    }
+    return true;
+  },
+
+  applyAnalogImpulse(step: number, velocityScale: number) {
     if (this.paused) return;
     this.notifyInteraction();
-    this.prepareDirection(deltaY);
-    const step = clamp(deltaY * 0.00022, -0.028, 0.028);
-    if (this.loopProgress > 0.002 || (deltaY > 0 && this.scrollProgress >= EXPERIENCE_MAX_SCROLL - 0.018)) {
-      this.loopTransitioning = false;
-      this.loopTarget = clamp(this.loopTarget + step * 3.8, 0, 1.05);
-      if (this.loopTarget >= 0.96) {
-        this.loopTransitioning = true;
-        this.loopTarget = 1.05;
-      }
+    this.prepareDirection(step);
+    if (step < 0 && this.scrollProgress <= 0.008 && this.loopProgress <= 0.002 && this.reverseReady) {
+      this.enterReverseLoop(Math.abs(step) * 4.5);
       return;
     }
-    this.velocity = clamp(this.velocity + step * 1.15, -0.16, 0.16);
+    if (this.loopProgress > 0.002 || (step > 0 && this.scrollProgress >= EXPERIENCE_MAX_SCROLL - 0.018)) {
+      if (this.stepLoopTarget(step * 4.2, 0.03)) return;
+    }
+    this.velocity = clamp(this.velocity + step * velocityScale, -0.16, 0.16);
     if (Math.abs(step) > 1e-5) {
       this.direction = step > 0 ? 1 : -1;
     }
   },
 
+  applyWheelImpulse(deltaY: number) {
+    this.applyAnalogImpulse(clamp(deltaY * 0.00022, -0.028, 0.028), 1.15);
+  },
+
   applyTouchImpulse(deltaY: number) {
-    if (this.paused) return;
-    this.notifyInteraction();
-    this.prepareDirection(deltaY);
-    const step = clamp(deltaY * 0.00044, -0.032, 0.032);
-    if (this.loopProgress > 0.002 || (deltaY > 0 && this.scrollProgress >= EXPERIENCE_MAX_SCROLL - 0.018)) {
-      this.loopTransitioning = false;
-      this.loopTarget = clamp(this.loopTarget + step * 3.8, 0, 1.05);
-      if (this.loopTarget >= 0.96) {
-        this.loopTransitioning = true;
-        this.loopTarget = 1.05;
-      }
-      return;
-    }
-    this.velocity = clamp(this.velocity + step * 1.1, -0.16, 0.16);
-    if (Math.abs(step) > 1e-5) {
-      this.direction = step > 0 ? 1 : -1;
-    }
+    this.applyAnalogImpulse(clamp(deltaY * 0.00044, -0.032, 0.032), 1.1);
   },
 
   applyKeyStep(delta: number) {
     if (this.paused) return;
     this.notifyInteraction();
     this.prepareDirection(delta);
+    if (delta < 0 && this.scrollProgress <= 0.008 && this.loopProgress <= 0.002 && this.reverseReady) {
+      this.enterReverseLoop(0.24);
+      return;
+    }
     if (delta > 0 && this.scrollProgress >= EXPERIENCE_MAX_SCROLL - 0.018) {
       this.triggerLoop();
+      return;
+    }
+    if (this.loopProgress > 0.002 && this.stepLoopTarget(delta * 1.8, 0.04)) {
       return;
     }
     this.velocity = clamp(this.velocity + delta * 0.3, -0.16, 0.16);
@@ -274,16 +299,13 @@ export const scrollDirector = {
     }
 
     if (this.loopTarget > 0 || this.loopProgress > 0.0001) {
-      if (!this.loopTransitioning && this.autoWeight < 0.05 && this.velocity <= 0.0005 && this.idleElapsed < 0.25 && this.direction < 0) {
-        this.loopTarget = damp(this.loopTarget, 0, 6.5, dt);
-      }
       const loopLambda = reducedMotion ? 11.0 : 5.4;
       this.loopProgress = damp(this.loopProgress, Math.min(1, this.loopTarget), loopLambda, dt);
       if ((this.loopTransitioning || this.loopTarget >= 0.992) && this.loopProgress >= 0.992) {
         this.wrapLoopSmooth();
         return;
       }
-      if (!this.loopTransitioning && this.loopProgress < 0.001 && this.loopTarget < 0.001) {
+      if (!this.loopTransitioning && this.loopProgress < 0.002 && this.loopTarget < 0.001) {
         this.loopProgress = 0;
         this.loopTarget = 0;
       }

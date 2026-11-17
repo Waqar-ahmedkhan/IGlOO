@@ -13,16 +13,16 @@ interface CameraWaypoint {
 const WAYPOINTS: CameraWaypoint[] = [
   { p: 0.31, pos: [0, 0.45, 7.6], look: [0, 0, -3.5], fogDensity: 0.088 },
   { p: 0.43, pos: [0, 0.02, 5.2], look: [0, 0.02, -12], fogDensity: 0.084 },
-  { p: 0.48, pos: [0, 0.02, 2.35], look: [0, 0.02, -11], fogDensity: 0.048 },
-  { p: 0.53, pos: [0, 0.02, 1.55], look: [0, 0.02, -3.5], fogDensity: 0.044 },
-  { p: 0.59, pos: [0, 0.02, 0.45], look: [0, 0.02, -8], fogDensity: 0.046 },
-  { p: 0.62, pos: [0, 0.02, -1.8], look: [0, 0.02, -9], fogDensity: 0.068 },
-  { p: 0.64, pos: [0.05, 0.02, -4.6], look: [0.1, 0.02, -14], fogDensity: 0.078 },
-  { p: 0.68, pos: [0.15, -0.04, -9.2], look: [0.15, -0.04, -24], fogDensity: 0.084 },
-  { p: 0.72, pos: [0.15, -0.04, -11.8], look: [0.15, -0.04, -25.5], fogDensity: 0.048 },
-  { p: 0.77, pos: [0.15, -0.04, -12.35], look: [0.15, -0.04, -17.5], fogDensity: 0.044 },
-  { p: 0.82, pos: [0.15, -0.04, -13.55], look: [0.15, -0.04, -23], fogDensity: 0.046 },
-  { p: 0.85, pos: [0.15, -0.04, -15.8], look: [0.15, -0.04, -23], fogDensity: 0.068 },
+  { p: 0.48, pos: [0, 0.02, 3.85], look: [0, 0.02, -11], fogDensity: 0.048 },
+  { p: 0.53, pos: [0, 0.02, 3.25], look: [0, 0.02, -3.5], fogDensity: 0.042 },
+  { p: 0.59, pos: [0, 0.02, 2.35], look: [0, 0.02, -8], fogDensity: 0.046 },
+  { p: 0.62, pos: [0, 0.02, -1.2], look: [0, 0.02, -9], fogDensity: 0.068 },
+  { p: 0.64, pos: [0.05, 0.02, -4.4], look: [0.1, 0.02, -14], fogDensity: 0.078 },
+  { p: 0.68, pos: [0.15, -0.04, -8.8], look: [0.15, -0.04, -24], fogDensity: 0.084 },
+  { p: 0.72, pos: [0.15, -0.04, -9.85], look: [0.15, -0.04, -25.5], fogDensity: 0.048 },
+  { p: 0.77, pos: [0.15, -0.04, -10.55], look: [0.15, -0.04, -17.5], fogDensity: 0.042 },
+  { p: 0.82, pos: [0.15, -0.04, -11.55], look: [0.15, -0.04, -23], fogDensity: 0.046 },
+  { p: 0.85, pos: [0.15, -0.04, -15.6], look: [0.15, -0.04, -23], fogDensity: 0.068 },
   { p: 0.87, pos: [0.15, -0.04, -18.5], look: [0.15, -0.04, -25.2], fogDensity: 0.078 },
   { p: 0.92, pos: [-0.35, 0.05, -24.4], look: [0, 0, -32.5], fogDensity: 0.064 },
 ];
@@ -129,7 +129,7 @@ export function computeDetailCameraPose(
   outLook: THREE.Vector3,
 ): { fogDensity: number; fov: number } {
   const [cx, cy, cz] = project.worldPos;
-  const distZ = isMobile ? 5.9 : 4.55;
+  const distZ = isMobile ? 6.8 : 5.65;
   const parX = reducedMotion ? 0 : pointerNdcX * 0.16;
   const parY = reducedMotion ? 0 : pointerNdcY * 0.1;
 

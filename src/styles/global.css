@@ -739,7 +739,12 @@ a:focus-visible,
     linear-gradient(currentColor,currentColor) right top/8px 1px no-repeat,
     linear-gradient(currentColor,currentColor) right top/1px 8px no-repeat,
     linear-gradient(currentColor,currentColor) right bottom/8px 1px no-repeat,
-    linear-gradient(currentColor,currentColor) right bottom/1px 8px no-repeat;
+    linear-gradient(currentColor,currentColor) right bottom/1px 8px no-repeat,
+    linear-gradient(155deg, rgba(240, 248, 255, 0.14), rgba(210, 228, 245, 0.05));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 4px 18px rgba(10, 20, 32, 0.12);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-radius: 2px;
 }
 .social-selector .sculpture-arrow {
   position: absolute;
@@ -791,12 +796,15 @@ a:focus-visible,
   gap: 6px;
   min-width: 196px;
   padding: 8px 11px 9px;
-  background: rgba(235, 242, 248, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 2px;
+  background: linear-gradient(150deg, rgba(242, 248, 255, 0.14) 0%, rgba(215, 230, 245, 0.06) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 28px rgba(12, 22, 34, 0.14);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  border-radius: 4px;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.45s ease, transform 0.35s var(--ease-arctic);

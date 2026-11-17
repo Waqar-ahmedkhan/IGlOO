@@ -27,28 +27,28 @@ export function createIceCrystalMaterial(): {
   const roughnessMap = getCrystalRoughnessTexture();
 
   const material = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color('#DCE7F3'),
-    transmission: 0.88,
-    ior: 1.36,
-    thickness: 2.2,
-    dispersion: 4.4,
-    roughness: 0.24,
+    color: new THREE.Color('#EEF6FF'),
+    transmission: 0.96,
+    ior: 1.48,
+    thickness: 1.65,
+    dispersion: 5.8,
+    roughness: 0.085,
     roughnessMap,
     bumpMap,
-    bumpScale: 0.032,
+    bumpScale: 0.018,
     metalness: 0.02,
-    reflectivity: 0.92,
-    clearcoat: 0.78,
-    clearcoatRoughness: 0.16,
-    attenuationColor: new THREE.Color('#C4DCF2'),
-    attenuationDistance: 2.6,
+    reflectivity: 1.0,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.045,
+    attenuationColor: new THREE.Color('#D6ECFF'),
+    attenuationDistance: 3.4,
     specularIntensity: 1.0,
     specularColor: new THREE.Color('#FFFFFF'),
     flatShading: true,
-    envMapIntensity: 1.35,
+    envMapIntensity: 1.75,
   });
 
-  material.customProgramCacheKey = () => 'igloo-ice-crystal-v1';
+  material.customProgramCacheKey = () => 'igloo-ice-crystal-glass-v2';
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uniforms.uTime;
@@ -87,26 +87,26 @@ export function createIceCrystalMaterial(): {
       .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
-        // Keep central window facets clearer while chipped side spurs carry heavier frost
-        float clearWindow = mix(0.32, 1.35, clamp(vFrost, 0.0, 1.0));
-        roughnessFactor = clamp(roughnessFactor * clearWindow, 0.04, 0.78);`,
+        // Crystal-clear optical glass center window with lightly frosted outer bevels
+        float clearWindow = mix(0.16, 0.85, clamp(vFrost, 0.0, 1.0));
+        roughnessFactor = clamp(roughnessFactor * clearWindow, 0.02, 0.45);`,
       )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         vec3 cViewDir = normalize(vViewPosition);
-        float cFresnel = pow(1.0 - saturate(abs(dot(normal, cViewDir))), 2.25);
+        float cFresnel = pow(1.0 - saturate(abs(dot(normal, cViewDir))), 2.55);
 
         float minBary = min(vBary.x, min(vBary.y, vBary.z));
-        float facetEdge = 1.0 - smoothstep(0.0, 0.048, minBary);
+        float facetEdge = 1.0 - smoothstep(0.0, 0.042, minBary);
 
-        // Subtle blue-white edge dispersion & icy frosted sheen
-        vec3 glacialBlue = vec3(0.68, 0.87, 1.0);
-        vec3 frostWhite = vec3(0.95, 0.98, 1.0);
-        vec3 rimHue = mix(glacialBlue, frostWhite, cFresnel * 0.65 + vFrost * 0.35);
+        // Crisp refractive glass edge highlights & prismatic frost sheen
+        vec3 glacialBlue = vec3(0.74, 0.90, 1.0);
+        vec3 frostWhite = vec3(0.97, 0.99, 1.0);
+        vec3 rimHue = mix(glacialBlue, frostWhite, cFresnel * 0.72 + vFrost * 0.28);
 
-        float baseRim = cFresnel * (0.14 + vFrost * 0.22);
-        float creaseGlow = facetEdge * (0.045 + vFrost * 0.08);
+        float baseRim = cFresnel * (0.22 + vFrost * 0.24);
+        float creaseGlow = facetEdge * (0.065 + vFrost * 0.11);
         float activeBoost = 1.0 + uBoost * 0.85 + uDetailBlend * 0.55;
 
         totalEmissiveRadiance += rimHue * (baseRim + creaseGlow) * activeBoost;`,

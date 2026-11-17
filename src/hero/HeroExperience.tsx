@@ -429,6 +429,7 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
     const dt = Math.min(delta, 0.05);
 
     if (heroStore.getState().introComplete && (atmosphereReady.current || scrollDirector.scrollProgress < 0.3)) {
+      scrollDirector.reverseReady = atmosphereReady.current;
       scrollDirector.stepAuto(dt, profile.reducedMotion, atmosphereReady.current);
       scrollDirector.step(dt, profile.reducedMotion);
     }
