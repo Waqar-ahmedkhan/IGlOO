@@ -23,7 +23,7 @@ export interface IntroTimelineController {
 export function createIntroTimeline(reducedMotion: boolean): IntroTimelineController {
   gsap.ticker.lagSmoothing(0);
 
-  const timeScale = reducedMotion ? 2.8 : 1.0;
+  const timeScale = reducedMotion ? 3.2 : 1.45;
   let timeline: gsap.core.Timeline | null = null;
   let uiShown = false;
   let tickStep = 0;

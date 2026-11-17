@@ -112,9 +112,11 @@ export function AtmosphericFog({ snowCount, reducedMotion }: AtmosphericFogProps
     const t = weather.time;
     const emerge = introStage.mountainEmerge;
 
-    // Keep fog restrained once mountains emerge so rocky silhouettes up to 80m remain crisp
+    // Keep fog restrained once mountains emerge while reacting subtly to camera altitude & pullback
     if (fogRef.current) {
-      fogRef.current.density = THREE.MathUtils.lerp(0.032, 0.0052, emerge);
+      const camPull = Math.max(0, (state.camera.position.z - 11.5) * 0.00018);
+      const camAlt = Math.max(0, (state.camera.position.y - 2.5) * 0.00024);
+      fogRef.current.density = THREE.MathUtils.lerp(0.032, 0.0052 + camPull + camAlt, emerge);
     }
 
     const driftScale = reducedMotion ? 0.15 : 1.0;

@@ -422,8 +422,10 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
   useFrame((_, delta) => {
     if (!group.current) return;
     const progress = scrollDirector.scrollProgress;
+    const loopProgress = scrollDirector.loopProgress;
     const portalProgress = getPortalProgress(progress);
-    const reveal = getSculptureReveal(portalProgress);
+    const loopDissolve = loopProgress > 0.002 ? THREE.MathUtils.smoothstep(loopProgress, 0.06, 0.45) : 0;
+    const reveal = getSculptureReveal(portalProgress) * (1 - THREE.MathUtils.smoothstep(loopProgress, 0.18, 0.5));
     group.current.visible = reveal > 0.001;
     if (cageGroup.current) cageGroup.current.visible = reveal > 0.02;
     if (!group.current.visible) {
@@ -472,11 +474,11 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
       swirlEnergy.current = Math.min(1.5, swirlEnergy.current + 0.5);
     }
 
-    pulse.current = THREE.MathUtils.damp(pulse.current, 0, 2.0, dt);
-    clickBurst.current = THREE.MathUtils.damp(clickBurst.current, 0, 2.3, dt);
-    swirlEnergy.current = THREE.MathUtils.damp(swirlEnergy.current, 0, 1.35, dt);
+    pulse.current = THREE.MathUtils.damp(pulse.current, 0, 2.8, dt);
+    clickBurst.current = THREE.MathUtils.damp(clickBurst.current, 0, 3.0, dt);
+    swirlEnergy.current = THREE.MathUtils.damp(swirlEnergy.current, 0, 1.8, dt);
     if (clickBurst.current > 0.01) {
-      clickWave.current += dt * 4.2;
+      clickWave.current += dt * 5.8;
     }
 
     const uniforms = system.material.uniforms;
@@ -485,13 +487,14 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
     weights.y = THREE.MathUtils.damp(weights.y, selection.index === 1 ? 1 : 0, 3.8, dt);
     weights.z = THREE.MathUtils.damp(weights.z, selection.index === 2 ? 1 : 0, 3.8, dt);
 
-    group.current.rotation.y = reducedMotion ? 0 : Math.sin(elapsed.current * 0.24) * 0.24;
+    group.current.position.y = SCULPTURE_POSITION[1] + loopDissolve * 2.2;
+    group.current.rotation.y = reducedMotion ? 0 : Math.sin(elapsed.current * 0.24) * 0.24 + loopDissolve * 0.9;
     group.current.updateMatrixWorld();
 
     if (cageGroup.current) {
       cageGroup.current.rotation.y = reducedMotion
         ? 0
-        : elapsed.current * 0.045 + swirlEnergy.current * 0.18;
+        : elapsed.current * 0.045 + swirlEnergy.current * 0.18 + loopDissolve * 0.6;
     }
 
     const speed = Math.min(1.4, pointer.distanceTo(lastPointer.current) / Math.max(dt, 0.001) * 1.1);
@@ -518,15 +521,15 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
     const activeDisturb = Math.max(speed, uniforms.disturbance.value * 0.92);
     uniforms.disturbance.value = THREE.MathUtils.damp(uniforms.disturbance.value, Math.min(1.3, activeDisturb), 6.2, dt);
     soundController.setParticleMotion(
-      reducedMotion ? 0 : Math.min(1, Math.max(pulse.current, clickBurst.current * 0.85, uniforms.disturbance.value)),
+      reducedMotion ? 0 : Math.min(1, Math.max(pulse.current, clickBurst.current * 0.85, uniforms.disturbance.value, loopDissolve * 0.7)),
     );
     uniforms.time.value = elapsed.current;
     const arrival = THREE.MathUtils.smoothstep(portalProgress, 0.68, 0.76)
       * (1 - THREE.MathUtils.smoothstep(portalProgress, 0.8, 0.9));
-    uniforms.pulse.value = Math.max(pulse.current, arrival * 0.32);
+    uniforms.pulse.value = Math.max(pulse.current, arrival * 0.32, loopDissolve * 1.4);
     uniforms.clickBurst.value = reducedMotion ? 0 : clickBurst.current;
     uniforms.clickWave.value = clickWave.current;
-    uniforms.swirlEnergy.value = reducedMotion ? 0 : swirlEnergy.current;
+    uniforms.swirlEnergy.value = reducedMotion ? 0 : Math.max(swirlEnergy.current, loopDissolve * 1.35);
     const dpr = gl.getPixelRatio();
     uniforms.pixelRatio.value = dpr;
     uniforms.pointScale.value = size.height * dpr * 0.052;

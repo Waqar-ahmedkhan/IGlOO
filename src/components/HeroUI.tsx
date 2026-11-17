@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { heroStore, hudBridge, useHeroSelector } from '../hero/heroStore';
 import { soundController } from '../hero/SoundController';
+import { usePortfolioSelector } from '../portfolio/portfolioStore';
 import { ScrambleText } from './ScrambleText';
 
 export const HERO_MANIFESTO_COPY =
@@ -16,6 +17,7 @@ export function HeroUI() {
   const soundEnabled = useHeroSelector((s) => s.soundEnabled);
   const heroScroll = useHeroSelector((s) => s.heroScroll);
   const replayNonce = useHeroSelector((s) => s.replayNonce);
+  const detailOpen = usePortfolioSelector((s) => Boolean(s.selectedProjectId));
 
   // 60fps imperative SVG & exit dissolve refs (never trigger React state re-renders)
   const vertexTextRefs = useRef<(SVGTextElement | null)[]>([]);
@@ -26,6 +28,11 @@ export function HeroUI() {
   const copyrightRef = useRef<HTMLDivElement | null>(null);
   const manifestoRef = useRef<HTMLElement | null>(null);
   const scrollHintRef = useRef<HTMLDivElement | null>(null);
+  const phaseHudRef = useRef<HTMLDivElement | null>(null);
+  const phaseCodeRef = useRef<HTMLSpanElement | null>(null);
+  const phaseLabelRef = useRef<HTMLSpanElement | null>(null);
+  const progressFillRef = useRef<HTMLSpanElement | null>(null);
+  const progressPctRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     const sync = () => {
@@ -113,11 +120,31 @@ export function HeroUI() {
         const scrollOpacity = uiVisible && heroScroll < 0.25 ? 0.88 * exitOpacity : 0;
         scrollHintRef.current.style.opacity = scrollOpacity.toFixed(3);
       }
+
+      if (phaseHudRef.current) {
+        phaseHudRef.current.style.opacity = uiVisible && !detailOpen ? '1' : '0';
+        phaseHudRef.current.dataset.stage = hudBridge.cyclePhaseIndex === 5 ? 'particle' : 'default';
+      }
+      if (phaseCodeRef.current && phaseCodeRef.current.textContent !== hudBridge.cyclePhaseCode) {
+        phaseCodeRef.current.textContent = hudBridge.cyclePhaseCode;
+      }
+      if (phaseLabelRef.current && phaseLabelRef.current.textContent !== hudBridge.cyclePhaseLabel) {
+        phaseLabelRef.current.textContent = hudBridge.cyclePhaseLabel;
+      }
+      if (progressFillRef.current) {
+        progressFillRef.current.style.transform = `scaleX(${hudBridge.cycleProgress.toFixed(4)})`;
+      }
+      if (progressPctRef.current) {
+        const pctStr = `${String(Math.round(hudBridge.cycleProgress * 100)).padStart(2, '0')}%`;
+        if (progressPctRef.current.textContent !== pctStr) {
+          progressPctRef.current.textContent = pctStr;
+        }
+      }
     };
 
     sync();
     return hudBridge.subscribe(sync);
-  }, [uiVisible, heroScroll]);
+  }, [uiVisible, heroScroll, detailOpen]);
 
   const handleToggleSound = () => {
     const next = !soundEnabled;
@@ -283,6 +310,23 @@ export function HeroUI() {
             </span>
             <span>Sound: {soundEnabled ? 'On' : 'Off'}</span>
           </button>
+        </div>
+
+        {/* Bottom-right: Minimal frosted glass phase indicator & ultra-thin cycle progress rail */}
+        <div
+          ref={phaseHudRef}
+          className="cycle-glass-hud"
+          data-stage="default"
+          aria-hidden="true"
+        >
+          <div className="cycle-phase-row">
+            <span ref={phaseCodeRef} className="cycle-phase-code">01 / 06</span>
+            <span ref={phaseLabelRef} className="cycle-phase-label">THE FROZEN WORLD</span>
+            <span ref={progressPctRef} className="cycle-phase-pct">00%</span>
+          </div>
+          <div className="cycle-progress-track">
+            <span ref={progressFillRef} className="cycle-progress-fill" />
+          </div>
         </div>
       </div>
     </>

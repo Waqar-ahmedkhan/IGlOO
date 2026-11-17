@@ -12,6 +12,8 @@ export interface HeroExitSignals {
   uiDissolve: number; // Manifesto / copyright / scroll hint dissolve & glitch (0 -> 1)
   waveSweep: number; // Diagonal activation wave front (0 -> 1 from upper-left to lower-right)
   opticalImpulse: number; // Localized lower-left foreground refraction impulse during State C pullback
+  reconstructFactor: number; // Phase 06 (1 -> 0): curved orbital reassembly back to igloo rest
+  reconstructWireOpacity: number; // Faint wireframe dome showing block alignment targets during Phase 06
 }
 
 const zeroSignals: HeroExitSignals = {
@@ -25,13 +27,40 @@ const zeroSignals: HeroExitSignals = {
   uiDissolve: 0,
   waveSweep: 0,
   opticalImpulse: 0,
+  reconstructFactor: 0,
+  reconstructWireOpacity: 0,
 };
 
 /**
- * Pure frame-synced computation of Phase 1 Hero Exit states (A -> E) from scrollProgress [0..0.45].
- * Reversible continuously when scrolling back toward 0.
+ * Pure frame-synced computation of Phase 1 Hero Exit states (A -> E) from scrollProgress [0..0.45]
+ * plus Phase 06 seamless curved reconstruction from loopProgress [0..1].
  */
-export function computeHeroExitSignals(scrollProgress: number, reducedMotion: boolean): HeroExitSignals {
+export function computeHeroExitSignals(
+  scrollProgress: number,
+  reducedMotion: boolean,
+  loopProgress = 0,
+): HeroExitSignals {
+  if (loopProgress > 0.002) {
+    const rawReconstruct = 1 - smoothstep(0.24, 0.96, loopProgress);
+    const reconstructFactor = reducedMotion ? rawReconstruct * 0.28 : rawReconstruct;
+    const wireBell =
+      smoothstep(0.2, 0.42, loopProgress) * (1 - smoothstep(0.84, 0.98, loopProgress));
+    return {
+      activation: rawReconstruct * 0.45,
+      zoomOut: 0,
+      frostProgress: 0,
+      atmoReveal: 0,
+      internalGlowBoost: rawReconstruct * 0.65,
+      brickSeparation: 0,
+      smokeIntensity: 0.35 + rawReconstruct * 0.35,
+      uiDissolve: 1 - smoothstep(0.5, 0.92, loopProgress),
+      waveSweep: 0,
+      opticalImpulse: 0,
+      reconstructFactor,
+      reconstructWireOpacity: wireBell * 0.72,
+    };
+  }
+
   if (scrollProgress <= 0.001) {
     return zeroSignals;
   }
@@ -65,5 +94,7 @@ export function computeHeroExitSignals(scrollProgress: number, reducedMotion: bo
     uiDissolve,
     waveSweep,
     opticalImpulse,
+    reconstructFactor: 0,
+    reconstructWireOpacity: 0,
   };
 }

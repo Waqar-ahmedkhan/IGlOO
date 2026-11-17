@@ -176,8 +176,12 @@ export function IglooBrickInteraction({
     brickUniforms.uRevealHeight.value =
       brickReveal <= 0.001 ? -1.0 : THREE.MathUtils.lerp(-0.15, 3.35, brickReveal);
     brickUniforms.uInnerGlow.value = introStage.innerGlow + exit.internalGlowBoost;
-    brickUniforms.uSeamBoost.value = heroScroll * 0.4 + exit.activation * 0.92;
-    brickUniforms.uWireEdge.value = Math.max(introStage.wireframeFade, exit.activation * 0.45);
+    brickUniforms.uSeamBoost.value = heroScroll * 0.4 + exit.activation * 0.92 + exit.reconstructFactor * 0.65;
+    brickUniforms.uWireEdge.value = Math.max(
+      introStage.wireframeFade,
+      exit.activation * 0.45,
+      exit.reconstructWireOpacity * 0.7,
+    );
 
     if (shadowMatRef.current) {
       shadowMatRef.current.opacity = smoothstep(0.15, 0.85, brickReveal) * 0.48;
@@ -290,16 +294,29 @@ export function IglooBrickInteraction({
       const scrollSep =
         brick.isInteractive && sepStrength > 0.005
           ? sepStrength *
-            (0.25 + 0.75 * waveActivation) *
-            (0.22 + rowNorm * 0.88 * (0.52 + brick.seed * 0.78))
+            (0.18 + 0.75 * waveActivation) *
+            (0.18 + rowNorm * 0.62 * (0.55 + brick.seed * 0.65))
           : 0;
 
-      const targetDisp = Math.max(0, cursorPush + clickPush + idleWave + scrollSep);
+      // Phase 06 curved spiral reconstruction from suspended fragments back onto wireframe dome
+      const reconstruct = exit.reconstructFactor;
+      let reconstructArc = 0;
+      if (reconstruct > 0.002) {
+        const built = 1 - reconstruct;
+        const startDelay = brick.isTunnel ? 0.06 + brick.seed * 0.12 : rowNorm * 0.34 + waveCoord * 0.16;
+        const lockProgress = smoothstep(startDelay, startDelay + 0.5, built);
+        reconstructArc = 1 - lockProgress;
+        if (reconstructArc > 0.01 && reconstructArc < 0.28) {
+          seamPreGlow = Math.max(seamPreGlow, Math.sin((reconstructArc / 0.28) * Math.PI) * 1.1);
+        }
+      }
 
-      // Smooth outward acceleration + slightly faster controlled deceleration for mechanical lock
+      const targetDisp = reconstruct > 0.002 ? 0 : Math.max(0, cursorPush + clickPush + idleWave + scrollSep);
+
+      // Faster, cleaner outward acceleration + crisp controlled deceleration for mechanical lock
       const expanding = targetDisp > springStates[i].value;
-      const stiffness = expanding ? 48 : 58;
-      const dampingRatio = expanding ? 9.8 : 11.2;
+      const stiffness = expanding ? 68 : 82;
+      const dampingRatio = expanding ? 11.4 : 12.6;
       let disp = Math.max(0, stepSpring(springStates[i], targetDisp, stiffness, dampingRatio, dt));
       if (targetDisp < 0.002 && disp < 0.0025) {
         disp = 0;
@@ -309,23 +326,23 @@ export function IglooBrickInteraction({
 
       // Synchronized mechanical escapement ticks (activation) & tactile stone/ice locking clicks (settle)
       if (introReady && brick.isInteractive) {
-        if (lockStates[i] === 0 && disp > 0.12 && expanding) {
+        if (lockStates[i] === 0 && (disp > 0.12 && expanding || reconstructArc > 0.18)) {
           lockStates[i] = 1;
-          soundController.playWaveTick(waveCoord, Math.min(1, disp * 1.6));
-        } else if (lockStates[i] === 1 && disp < 0.022 && !expanding) {
+          soundController.playWaveTick(waveCoord, Math.min(1, Math.max(disp * 1.6, 0.5)));
+        } else if (lockStates[i] === 1 && disp < 0.022 && !expanding && reconstructArc < 0.025) {
           lockStates[i] = 0;
-          soundController.playBrickLockClick(brick.tone, 0.65);
+          soundController.playBrickLockClick(brick.tone, 0.68);
         }
       }
 
       if (disp > maxDisp) maxDisp = disp;
       const showExitLabel =
-        (sepStrength > 0.1 || idleWave > 0.028) &&
+        (sepStrength > 0.1 || idleWave > 0.028 || reconstructArc > 0.14) &&
         exit.frostProgress < 0.16 &&
-        disp > 0.045 &&
+        (disp > 0.045 || reconstructArc > 0.14) &&
         brick.id % 3 === 0;
       if (brick.isInteractive && ((hasHit && cursorPush > 0.14) || showExitLabel)) {
-        activeList.push({ idx: i, disp });
+        activeList.push({ idx: i, disp: Math.max(disp, reconstructArc * 0.65) });
       }
 
       tmpPos.copy(brick.basePos).addScaledVector(brick.outwardDir, disp);
@@ -333,10 +350,26 @@ export function IglooBrickInteraction({
         tmpPos.y += scrollSep * (0.25 + brick.seed * 0.42);
       }
 
-      // Controlled 1-5 deg architectural tilt during wave/separation (no chaotic drift)
+      // Apply curved 3D spiral flight trajectory during Phase 06 reconstruction
+      if (reconstructArc > 0.002) {
+        const radialLift = reconstructArc * (1.6 + brick.seed * 1.4);
+        const heightArc = Math.pow(reconstructArc, 1.25) * (3.0 + rowNorm * 1.8 + brick.seed * 1.1);
+        const swirlAngle = reconstructArc * (0.85 + brick.seed * 0.65) * (brick.id % 2 === 0 ? 1 : -1);
+        tmpPos.addScaledVector(brick.outwardDir, radialLift);
+        tmpPos.y += heightArc;
+        const cosA = Math.cos(swirlAngle);
+        const sinA = Math.sin(swirlAngle);
+        const rx = tmpPos.x * cosA - tmpPos.z * sinA;
+        const rz = tmpPos.x * sinA + tmpPos.z * cosA;
+        tmpPos.x = rx;
+        tmpPos.z = rz;
+      }
+
+      // Controlled architectural tilt during wave/separation or reconstruction flight (zero drift at rest)
       tmpQuat.copy(brick.baseQuat);
-      if (disp > 0.008 && !reducedMotion && brick.isInteractive) {
-        const maxTiltRad = Math.min(0.087, disp * 0.14); // 0.087 rad = ~5 degrees
+      if ((disp > 0.008 || reconstructArc > 0.008) && !reducedMotion) {
+        const flightAngle = reconstructArc * (0.55 + brick.seed * 0.45);
+        const maxTiltRad = Math.min(0.087, disp * 0.14) + flightAngle;
         const signA = brick.id % 2 === 0 ? 1 : -1;
         const signB = brick.id % 3 === 0 ? -1 : 1;
         tmpEuler.set(
@@ -353,7 +386,10 @@ export function IglooBrickInteraction({
       tmpMatrix.compose(tmpPos, tmpQuat, tmpScale);
       mesh.setMatrixAt(i, tmpMatrix);
 
-      glowArray[i] = Math.min(1.85, seamPreGlow * 0.85 + disp * 1.48 + exit.internalGlowBoost * 0.28);
+      glowArray[i] = Math.min(
+        1.85,
+        seamPreGlow * 0.85 + disp * 1.48 + reconstructArc * 0.72 + exit.internalGlowBoost * 0.28,
+      );
     }
 
     mesh.instanceMatrix.needsUpdate = true;

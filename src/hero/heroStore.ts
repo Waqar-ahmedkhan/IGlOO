@@ -52,6 +52,11 @@ export const hudBridge = {
   vertexAnnotations: [] as VertexAnnotation[],
   brickAnnotations: [] as BrickAnnotation[],
   uiDissolve: 0,
+  cycleProgress: 0,
+  cyclePhaseIndex: 1,
+  cyclePhaseCode: '01 / 06',
+  cyclePhaseLabel: 'THE FROZEN WORLD',
+  autoPlaying: true,
   listeners: new Set<() => void>(),
   emit() {
     this.listeners.forEach((cb) => cb());

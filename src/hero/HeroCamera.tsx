@@ -10,6 +10,7 @@ interface HeroCameraProps {
   iglooX: number;
   pointerNdcRef: React.MutableRefObject<THREE.Vector2>;
   scrollProgressRef: React.MutableRefObject<number>;
+  loopProgressRef?: React.MutableRefObject<number>;
   reducedMotion: boolean;
 }
 
@@ -21,6 +22,7 @@ export function HeroCamera({
   iglooX,
   pointerNdcRef,
   scrollProgressRef,
+  loopProgressRef,
   reducedMotion,
 }: HeroCameraProps) {
   const threeState = useThree();
@@ -44,6 +46,7 @@ export function HeroCamera({
     const t = state.clock.elapsedTime;
     const isMobile = size.width < 768;
     const isTablet = size.width >= 768 && size.width < 1200;
+    const loopP = loopProgressRef?.current ?? 0;
 
     const targetFov = computeCameraPathPose(
       {
@@ -51,6 +54,7 @@ export function HeroCamera({
         iglooX,
         descend: introStage.cameraDescend,
         scrollProgress: scrollProgressRef.current,
+        loopProgress: loopP,
         isMobile,
         isTablet,
         pointerNdcX: pointerNdcRef.current.x,
@@ -61,10 +65,17 @@ export function HeroCamera({
       goalLook,
     );
 
-    const lambda = reducedMotion ? 12 : 5.4;
-    posRef.current.lerp(goalPos, 1 - Math.exp(-lambda * dt));
-    lookRef.current.lerp(goalLook, 1 - Math.exp(-lambda * dt));
-    fovRef.current = damp(fovRef.current, targetFov, lambda, dt);
+    if (loopP > 0.001 && loopP < 0.12) {
+      // Pre-align hero camera offscreen before Phase 06 mist crossfade opens
+      posRef.current.copy(goalPos);
+      lookRef.current.copy(goalLook);
+      fovRef.current = targetFov;
+    } else {
+      const lambda = reducedMotion ? 14 : 8.0;
+      posRef.current.lerp(goalPos, 1 - Math.exp(-lambda * dt));
+      lookRef.current.lerp(goalLook, 1 - Math.exp(-lambda * dt));
+      fovRef.current = damp(fovRef.current, targetFov, lambda, dt);
+    }
 
     cam.position.copy(posRef.current);
     cam.lookAt(lookRef.current);

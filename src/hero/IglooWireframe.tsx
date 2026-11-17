@@ -226,13 +226,22 @@ export function IglooWireframe({ bricks, exitSignalsRef }: IglooWireframeProps) 
     const wireFade = introStage.wireframeFade;
     const glow = introStage.innerGlow;
     const capBoost = introStage.coreCapBoost;
+    const reconstructWire = exitSignalsRef ? exitSignalsRef.current.reconstructWireOpacity : 0;
+    const activationWire = exitSignalsRef ? exitSignalsRef.current.activation * 0.34 : 0;
 
-    lineMaterial.uniforms.uReveal.value = wireReveal * 1.05;
-    lineMaterial.uniforms.uOpacity.value = Math.min(1, wireReveal * 4.0) * wireFade * 0.94;
+    const effectiveReveal = reconstructWire > 0.01 ? 1.05 : wireReveal * 1.05;
+    const effectiveOpacity = Math.max(
+      Math.min(1, wireReveal * 4.0) * wireFade * 0.94,
+      reconstructWire,
+      activationWire,
+    );
+
+    lineMaterial.uniforms.uReveal.value = effectiveReveal;
+    lineMaterial.uniforms.uOpacity.value = effectiveOpacity;
     lineMaterial.uniforms.uTime.value = t;
 
-    pointMaterial.uniforms.uReveal.value = wireReveal * 1.05;
-    pointMaterial.uniforms.uOpacity.value = Math.min(1, wireReveal * 4.0) * wireFade * 0.9;
+    pointMaterial.uniforms.uReveal.value = effectiveReveal;
+    pointMaterial.uniforms.uOpacity.value = effectiveOpacity * 0.94;
 
     // Bright upper luminous dome cap during stage 2-3 (uploaded_media_0)
     coreCapMaterial.uniforms.uCapOpacity.value = capBoost * 0.95;

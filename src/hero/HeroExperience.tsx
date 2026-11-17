@@ -13,9 +13,14 @@ import { SmokyWind } from './SmokyWind';
 import { HeroCamera } from './HeroCamera';
 import { heroStore, hudBridge, introStage, useHeroSelector } from './heroStore';
 import { soundController } from './SoundController';
-import { clamp } from '../utils/noise';
+import { clamp, smoothstep } from '../utils/noise';
 import type { PerformanceProfile } from '../utils/performance';
-import { scrollDirector, useScrollStateSelector } from '../experience/ScrollDirector';
+import {
+  classifyCyclePhase,
+  getCycleProgress,
+  scrollDirector,
+  useScrollStateSelector,
+} from '../experience/ScrollDirector';
 import { computeHeroExitSignals, type HeroExitSignals } from '../experience/HeroExitAnimation';
 import { createFrostTransitionMaterial } from '../shaders/frostTransitionMaterial';
 import { getProjectByPathname, type PortfolioProjectId } from '../portfolio/projects';
@@ -47,6 +52,7 @@ interface HeroSceneStageProps {
   pointerNdcRef: React.MutableRefObject<THREE.Vector2>;
   pointerActiveRef: React.MutableRefObject<boolean>;
   scrollProgressRef: React.MutableRefObject<number>;
+  loopProgressRef: React.MutableRefObject<number>;
   exitSignalsRef: React.MutableRefObject<HeroExitSignals>;
   smokeIntensityRef: React.MutableRefObject<number>;
 }
@@ -57,6 +63,7 @@ function HeroSceneStage({
   pointerNdcRef,
   pointerActiveRef,
   scrollProgressRef,
+  loopProgressRef,
   exitSignalsRef,
   smokeIntensityRef,
 }: HeroSceneStageProps) {
@@ -71,6 +78,7 @@ function HeroSceneStage({
         iglooX={iglooX}
         pointerNdcRef={pointerNdcRef}
         scrollProgressRef={scrollProgressRef}
+        loopProgressRef={loopProgressRef}
         reducedMotion={profile.reducedMotion}
       />
 
@@ -139,8 +147,10 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
   const pointerActiveRef = useRef(false);
   const scrollProgressRef = useRef(0);
   const heroScrollProgressRef = useRef(0);
+  const loopProgressRef = useRef(0);
   const smokeIntensityRef = useRef(0.35);
   const lastDissolveRef = useRef(0);
+  const lastCycleSyncRef = useRef(-1);
   const dollyWhooshedRef = useRef(false);
   const loopWhooshedRef = useRef(false);
 
@@ -277,6 +287,11 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
     const onPointerMove = (e: PointerEvent) => {
       updateNdc(e.clientX, e.clientY);
     };
+    const onPointerDown = () => {
+      if (heroStore.getState().introComplete) {
+        scrollDirector.notifyInteraction();
+      }
+    };
     const onPointerLeave = () => {
       pointerActiveRef.current = false;
     };
@@ -333,6 +348,7 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
     };
 
     window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerdown', onPointerDown, { passive: true });
     window.addEventListener('pointerleave', onPointerLeave, { passive: true });
     window.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove', onTouchMove, { passive: true });
@@ -342,6 +358,7 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
 
     return () => {
       window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointerleave', onPointerLeave);
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove', onTouchMove);
@@ -412,6 +429,7 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
     const dt = Math.min(delta, 0.05);
 
     if (heroStore.getState().introComplete && (atmosphereReady.current || scrollDirector.scrollProgress < 0.3)) {
+      scrollDirector.stepAuto(dt, profile.reducedMotion, atmosphereReady.current);
       scrollDirector.step(dt, profile.reducedMotion);
     }
 
@@ -422,11 +440,12 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
     const p = scrollDirector.scrollProgress;
     const loopProg = scrollDirector.loopProgress;
     scrollProgressRef.current = p;
+    loopProgressRef.current = loopProg;
 
     const heroP = loopProg > 0.002 ? 0 : p;
     heroScrollProgressRef.current = heroP;
 
-    const exit = computeHeroExitSignals(heroP, profile.reducedMotion);
+    const exit = computeHeroExitSignals(heroP, profile.reducedMotion, loopProg);
     exitSignalsRef.current = exit;
     smokeIntensityRef.current = exit.smokeIntensity;
 
@@ -455,17 +474,31 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
       heroStore.setState({ heroScroll: targetHeroScroll });
     }
 
-    const effectiveDissolve = loopProg > 0.002 ? Math.max(0, 1 - loopProg * 1.25) : exit.uiDissolve;
-    if (Math.abs(lastDissolveRef.current - effectiveDissolve) > 0.006) {
+    const cycleProg = getCycleProgress(p, loopProg);
+    const cyclePhase = classifyCyclePhase(cycleProg);
+    const effectiveDissolve = loopProg > 0.002 ? exit.uiDissolve : exit.uiDissolve;
+    const cycleChanged =
+      Math.abs(lastCycleSyncRef.current - cycleProg) > 0.0025 ||
+      hudBridge.cyclePhaseIndex !== cyclePhase.index ||
+      Math.abs(lastDissolveRef.current - effectiveDissolve) > 0.006;
+
+    if (cycleChanged) {
+      lastCycleSyncRef.current = cycleProg;
       lastDissolveRef.current = effectiveDissolve;
       hudBridge.uiDissolve = effectiveDissolve;
+      hudBridge.cycleProgress = cycleProg;
+      hudBridge.cyclePhaseIndex = cyclePhase.index;
+      hudBridge.cyclePhaseCode = cyclePhase.code;
+      hudBridge.cyclePhaseLabel = cyclePhase.label;
+      hudBridge.autoPlaying = scrollDirector.autoWeight > 0.15;
       hudBridge.emit();
     }
 
-    const activeFrost = loopProg > 0.002 ? loopProg : exit.frostProgress;
+    const loopFrost = loopProg > 0.002 ? smoothstep(0.18, 0.56, loopProg) : 0;
+    const activeFrost = loopProg > 0.002 ? loopFrost : exit.frostProgress;
     const frostBell = Math.sin(activeFrost * Math.PI);
     soundController.updateExperienceAtmosphere(
-      p,
+      loopProg > 0.002 ? 1.42 * (1 - loopProg * 0.85) : p,
       exit.activation,
       frostBell,
       scrollDirector.velocity,
@@ -476,26 +509,35 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
     const rtAtmo = rtAtmoRef.current;
 
     if (loopProg > 0.002 && rtHero && rtAtmo) {
-      // Seamless infinite loop transition: wipe from Particle Stage (atmoScene) back to Hero Igloo (heroScene at 0)
-      gl.setRenderTarget(rtAtmo);
-      gl.clear();
-      gl.render(atmoScene, atmoCamera);
+      if (loopProg < 0.18) {
+        gl.setRenderTarget(null);
+        gl.render(atmoScene, atmoCamera);
+      } else if (loopProg >= 0.56) {
+        // Reconstructing blocks arc back onto glowing wireframe dome inside heroScene
+        gl.setRenderTarget(null);
+        gl.render(heroScene, heroCamera);
+      } else {
+        // Smooth frosted crossfade from swirling upward particles back into reconstructing mountain igloo
+        gl.setRenderTarget(rtAtmo);
+        gl.clear();
+        gl.render(atmoScene, atmoCamera);
 
-      gl.setRenderTarget(rtHero);
-      gl.clear();
-      gl.render(heroScene, heroCamera);
+        gl.setRenderTarget(rtHero);
+        gl.clear();
+        gl.render(heroScene, heroCamera);
 
-      frostUniforms.tFrom.value = rtAtmo.texture;
-      frostUniforms.tTo.value = rtHero.texture;
-      frostUniforms.uProgress.value = loopProg;
-      frostUniforms.uOpticalImpulse.value = 0;
-      frostUniforms.uDirection.value = 1;
-      frostUniforms.uVelocity.value = 0.08;
-      frostUniforms.uTime.value = state.clock.elapsedTime;
-      frostUniforms.uAspect.value = size.width / Math.max(1, size.height);
+        frostUniforms.tFrom.value = rtAtmo.texture;
+        frostUniforms.tTo.value = rtHero.texture;
+        frostUniforms.uProgress.value = loopFrost;
+        frostUniforms.uOpticalImpulse.value = Math.sin(loopFrost * Math.PI) * 0.45;
+        frostUniforms.uDirection.value = 1;
+        frostUniforms.uVelocity.value = 0.07;
+        frostUniforms.uTime.value = state.clock.elapsedTime;
+        frostUniforms.uAspect.value = size.width / Math.max(1, size.height);
 
-      gl.setRenderTarget(null);
-      gl.render(quadScene, orthoCam);
+        gl.setRenderTarget(null);
+        gl.render(quadScene, orthoCam);
+      }
     } else if (exit.frostProgress <= 0.002 || !rtHero || !rtAtmo) {
       if (exit.opticalImpulse > 0.012 && rtHero) {
         // Localized lower-left foreground optical mist & refraction impulse during State C pullback
@@ -554,6 +596,7 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
           pointerNdcRef={pointerNdcRef}
           pointerActiveRef={pointerActiveRef}
           scrollProgressRef={heroScrollProgressRef}
+          loopProgressRef={loopProgressRef}
           exitSignalsRef={exitSignalsRef}
           smokeIntensityRef={smokeIntensityRef}
         />,

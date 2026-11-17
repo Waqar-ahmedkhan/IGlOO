@@ -274,7 +274,7 @@ export function AtmosphericScene({
           goalLook,
         );
 
-    const camLambda = reducedMotion ? 12.0 : selectedProject ? 4.4 : 5.2;
+    const camLambda = reducedMotion ? 14.0 : selectedProject ? 6.2 : 7.8;
     camPos.current.lerp(goalPos, 1 - Math.exp(-camLambda * dt));
     camLook.current.lerp(goalLook, 1 - Math.exp(-camLambda * dt));
     fovRef.current = damp(fovRef.current, pose.fov, camLambda, dt);
@@ -430,20 +430,23 @@ export function AtmosphericScene({
       const tlAnchorY = (-tmpPoint.y * 0.5 + 0.5) * size.height;
 
       const elbowOffset = isMobile ? 28 : 48;
-      const lineLen = isMobile ? 105 : 138;
+      const lineLen = isMobile ? 96 : 138;
       const tlElbowX = tlAnchorX - elbowOffset;
-      const tlElbowY = tlAnchorY - elbowOffset;
-      const tlEndX = Math.max(16, tlElbowX - lineLen);
+      const tlElbowY = Math.max(82, Math.min(size.height - 130, tlAnchorY - elbowOffset));
+      const tlEndX = Math.max(isMobile ? 18 : 28, tlElbowX - lineLen);
       const tlEndY = tlElbowY;
 
-      // Upper-right thermal telemetry anchor
+      // Upper-right thermal telemetry anchor (note -tmpPoint.y converts NDC +Y up -> screen +Y down)
       tmpPoint
         .copy(worldCenter)
         .addScaledVector(tmpRight, isOverpass ? 1.02 : 0.88)
         .addScaledVector(tmpUp, isOverpass ? 0.66 : 0.74)
         .project(camera);
-      const trX = Math.min(size.width - (isMobile ? 96 : 128), (tmpPoint.x * 0.5 + 0.5) * size.width);
-      const trY = (tmpPoint.y * 0.5 + 0.5) * size.height;
+      const trX = Math.max(
+        tlElbowX + 18,
+        Math.min(size.width - (isMobile ? 104 : 136), (tmpPoint.x * 0.5 + 0.5) * size.width),
+      );
+      const trY = Math.max(82, Math.min(size.height - 140, (-tmpPoint.y * 0.5 + 0.5) * size.height));
 
       // Lower-right date / CLICK TO EXPLORE leader attachment
       tmpPoint
@@ -452,8 +455,8 @@ export function AtmosphericScene({
         .addScaledVector(tmpUp, isOverpass ? -0.62 : -0.78)
         .project(camera);
       const brAnchorX = (tmpPoint.x * 0.5 + 0.5) * size.width;
-      const brAnchorY = (-tmpPoint.y * 0.5 + 0.5) * size.height;
-      const brEndX = Math.min(size.width - 16, brAnchorX + (isMobile ? 96 : 136));
+      const brAnchorY = Math.max(120, Math.min(size.height - 96, (-tmpPoint.y * 0.5 + 0.5) * size.height));
+      const brEndX = Math.min(size.width - (isMobile ? 18 : 28), brAnchorX + (isMobile ? 92 : 136));
       const brEndY = brAnchorY;
 
       portfolioHudBridge.projection = {
