@@ -16,6 +16,10 @@ class HeroSoundController {
   private enabled = false;
   private lastHoverTime = 0;
   private lastTickTime = 0;
+  private lastWaveTickTime = 0;
+  private lastLockClickTime = 0;
+  private lastWhooshTime = 0;
+  private lastClickBurstTime = 0;
   private lastAtmosphereTime = -1;
   private particleMotion = 0;
 
@@ -325,6 +329,182 @@ class HeroSoundController {
     gain.connect(this.masterGain);
     osc.start(t);
     osc.stop(t + 0.38);
+  }
+
+  // Layer B — Crisp precision watch-escapement tick synchronized with diagonal block wave activation
+  public playWaveTick(wavePos = 0.5, intensity = 0.5): void {
+    if (!this.enabled || !this.ctx || !this.masterGain) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastWaveTickTime < 55) return;
+    this.lastWaveTickTime = nowMs;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'triangle';
+    const baseFreq = 1280 + (1 - wavePos) * 440 + (Math.random() - 0.5) * 60;
+    osc.frequency.setValueAtTime(baseFreq, t);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.65, t + 0.022);
+
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(baseFreq * 1.1, t);
+    filter.Q.value = 3.5;
+
+    const peak = 0.016 * Math.max(0.25, Math.min(1, intensity));
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(peak, t + 0.0025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.026);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.03);
+  }
+
+  // Layer C — Tactile stone-and-ice locking click when displaced blocks settle back to rest
+  public playBrickLockClick(tone = 0.5, intensity = 0.6): void {
+    if (!this.enabled || !this.ctx || !this.masterGain) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastLockClickTime < 72) return;
+    this.lastLockClickTime = nowMs;
+
+    const t = this.ctx.currentTime;
+    const amp = Math.max(0.25, Math.min(1, intensity));
+
+    // Low stone thud body
+    const bodyOsc = this.ctx.createOscillator();
+    const bodyGain = this.ctx.createGain();
+    bodyOsc.type = 'sine';
+    const bodyFreq = 210 + tone * 95;
+    bodyOsc.frequency.setValueAtTime(bodyFreq, t);
+    bodyOsc.frequency.exponentialRampToValueAtTime(78, t + 0.048);
+
+    bodyGain.gain.setValueAtTime(0.0001, t);
+    bodyGain.gain.linearRampToValueAtTime(0.028 * amp, t + 0.003);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
+
+    bodyOsc.connect(bodyGain);
+    bodyGain.connect(this.masterGain);
+    bodyOsc.start(t);
+    bodyOsc.stop(t + 0.06);
+
+    // High crystalline ice lock transient
+    const snapOsc = this.ctx.createOscillator();
+    const snapGain = this.ctx.createGain();
+    snapOsc.type = 'triangle';
+    snapOsc.frequency.setValueAtTime(1920 + tone * 480, t);
+    snapOsc.frequency.exponentialRampToValueAtTime(840, t + 0.018);
+
+    snapGain.gain.setValueAtTime(0.0001, t);
+    snapGain.gain.linearRampToValueAtTime(0.011 * amp, t + 0.0018);
+    snapGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.02);
+
+    snapOsc.connect(snapGain);
+    snapGain.connect(this.masterGain);
+    snapOsc.start(t);
+    snapOsc.stop(t + 0.024);
+  }
+
+  // Layer F — Soft directional air whoosh during major camera dolly or loop transitions
+  public playCameraWhoosh(intensity = 0.5): void {
+    if (!this.enabled || !this.ctx || !this.masterGain) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastWhooshTime < 650) return;
+    this.lastWhooshTime = nowMs;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(58, t + 0.52);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(260, t);
+
+    const peak = 0.024 * Math.max(0.25, Math.min(1, intensity));
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(peak, t + 0.14);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.56);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.6);
+  }
+
+  // Interactive click shockwave on the 3D particle sculpture: crisp ice impact + scattering micro-clicks
+  public playParticleClickBurst(intensity = 0.75): void {
+    if (!this.enabled || !this.ctx || !this.masterGain) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastClickBurstTime < 75) return;
+    this.lastClickBurstTime = nowMs;
+
+    const t = this.ctx.currentTime;
+    const amp = Math.max(0.3, Math.min(1.2, intensity));
+
+    // Tactile low-mid crystalline impulse
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(240 + Math.random() * 60, t);
+    subOsc.frequency.exponentialRampToValueAtTime(84, t + 0.085);
+    subGain.gain.setValueAtTime(0.0001, t);
+    subGain.gain.linearRampToValueAtTime(0.042 * amp, t + 0.004);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    subOsc.connect(subGain);
+    subGain.connect(this.masterGain);
+    subOsc.start(t);
+    subOsc.stop(t + 0.12);
+
+    // Staggered ice-granule scatter micro-clicks
+    const freqs = [1180, 1560, 2090, 2640];
+    freqs.forEach((f, idx) => {
+      if (!this.ctx || !this.masterGain) return;
+      const delay = idx * 0.022 + Math.random() * 0.012;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = idx % 2 === 0 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(f + (Math.random() - 0.5) * 140, t + delay);
+      osc.frequency.exponentialRampToValueAtTime(f * 0.72, t + delay + 0.036);
+
+      gain.gain.setValueAtTime(0.0001, t + delay);
+      gain.gain.linearRampToValueAtTime(0.016 * amp * (1 - idx * 0.15), t + delay + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + delay + 0.045);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(t + delay);
+      osc.stop(t + delay + 0.05);
+    });
+  }
+
+  // Crisp mechanical-ice UI selector click when switching sculptures or clicking arrows
+  public playSelectorClick(direction = 1): void {
+    if (!this.enabled || !this.ctx || !this.masterGain) return;
+    const t = this.ctx.currentTime;
+    const base = direction >= 0 ? 1480 : 1240;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(base, t);
+    osc.frequency.exponentialRampToValueAtTime(base * 0.58, t + 0.032);
+
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.028, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.038);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.045);
   }
 }
 

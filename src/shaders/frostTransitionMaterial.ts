@@ -5,6 +5,7 @@ export interface FrostTransitionUniforms {
   tFrom: { value: THREE.Texture | null };
   tTo: { value: THREE.Texture | null };
   uProgress: { value: number };
+  uOpticalImpulse: { value: number };
   uDirection: { value: number };
   uVelocity: { value: number };
   uTime: { value: number };
@@ -18,6 +19,7 @@ export interface FrostTransitionUniforms {
  * 3. Localized red / cyan / amber chromatic aberration along the frost frontier
  * 4. Restrained digital block-displacement near the edge
  * 5. Subtle vertical parallax between outgoing hero and incoming atmospheric scene
+ * 6. Localized foreground optical mist & refraction impulse during State C pullback
  */
 export function createFrostTransitionMaterial(): {
   material: THREE.ShaderMaterial;
@@ -27,6 +29,7 @@ export function createFrostTransitionMaterial(): {
     tFrom: { value: null },
     tTo: { value: null },
     uProgress: { value: 0 },
+    uOpticalImpulse: { value: 0 },
     uDirection: { value: 1 },
     uVelocity: { value: 0 },
     uTime: { value: 0 },
@@ -46,6 +49,7 @@ export function createFrostTransitionMaterial(): {
       uniform sampler2D tFrom;
       uniform sampler2D tTo;
       uniform float uProgress;
+      uniform float uOpticalImpulse;
       uniform float uDirection;
       uniform float uVelocity;
       uniform float uTime;
@@ -95,26 +99,28 @@ export function createFrostTransitionMaterial(): {
 
         // Sweep threshold upward from below viewport (-0.24 -> 1.16)
         float frontier = mix(-0.24, 1.16, p);
-        float toWeight = 1.0 - smoothstep(frontier - 0.13, frontier + 0.13, crystalSurface);
+        float toWeight = 1.0 - smoothstep(frontier - 0.2, frontier + 0.2, crystalSurface);
 
-        // Concentrated activity right around the active diagonal frost edge
-        float edgeBand = smoothstep(0.22, 0.0, abs(crystalSurface - frontier)) * bell;
+        // Concentrated activity right around the active diagonal frost edge + lower-left foreground optical impulse
+        float edgeBand = (1.0 - smoothstep(0.0, 0.28, abs(crystalSurface - frontier))) * bell;
         float outerCorner = smoothstep(0.32, 0.92, length(vUv - 0.5)) * bell;
+        float lowerLeftMask = (1.0 - smoothstep(0.0, 0.52, vUv.y)) * (1.0 - smoothstep(0.15, 0.78, vUv.x));
+        float impulseField = uOpticalImpulse * lowerLeftMask;
 
         // Restrained digital block-displacement concentrated along the transition boundary
         vec2 blockGrid = floor(vUv * vec2(42.0, 28.0));
-        float blockSeed = hash21(blockGrid + floor(uTime * 8.0) * 0.01);
+        float blockSeed = hash21(blockGrid + floor(uTime * 2.0) * 0.01);
         float blockMask = step(0.62, blockSeed) * (edgeBand * 0.88 + bell * 0.25);
         vec2 blockOffset = vec2(
-          (hash21(blockGrid + 4.7) - 0.5) * 0.042,
-          (hash21(blockGrid + 11.3) - 0.5) * 0.018
+          (hash21(blockGrid + 4.7) - 0.5) * 0.008,
+          (hash21(blockGrid + 11.3) - 0.5) * 0.003
         ) * blockMask;
 
-        // Soft frost refractive displacement along the wavy ice edge
+        // Soft frost refractive displacement along the wavy ice edge & foreground snowbank impulse
         vec2 frostRefract = vec2(
           (fbm(aspectUv * 12.0 + 1.4) - 0.5),
           (fbm(aspectUv * 12.0 - 3.8) - 0.5)
-        ) * (0.014 * edgeBand + 0.005 * bell);
+        ) * (0.014 * edgeBand + 0.005 * bell + 0.0085 * impulseField);
 
         // Slight zoom + vertical parallax inside safe UV margins (zero top/bottom border clamp stretching)
         vec2 zoomedFrom = (vUv - 0.5) * (1.0 - p * 0.065) + 0.5;
@@ -122,8 +128,8 @@ export function createFrostTransitionMaterial(): {
         vec2 fromUv = clamp(zoomedFrom + blockOffset + frostRefract + vec2(0.0, -p * 0.018 * uDirection), 0.002, 0.998);
         vec2 toUv = clamp(zoomedTo + blockOffset * 0.45 + frostRefract * 0.5 + vec2(0.0, (1.0 - p) * 0.015 * uDirection), 0.002, 0.998);
 
-        // Localized Red / Cyan / Amber chromatic aberration near the frost fog boundary
-        float caAmount = (edgeBand * 0.014 + outerCorner * 0.006 + velBoost * 0.004) * bell;
+        // Localized Red / Cyan / Amber chromatic aberration near the frost fog boundary & foreground impulse
+        float caAmount = (edgeBand * 0.0035 + outerCorner * 0.001 + velBoost * 0.0005) * bell + impulseField * 0.0022;
         vec2 caVec = normalize((vUv - vec2(0.5, frontier)) + vec2(0.002, 0.001)) * caAmount;
         vec2 amberVec = vec2(-caVec.y, caVec.x) * 0.55;
 
@@ -142,9 +148,9 @@ export function createFrostTransitionMaterial(): {
 
         // Thick pale-grey spatial ice fog billowing up across the frontier from below
         float fogWisp = fbm(aspectUv * 3.4 - vec2(uTime * 0.05, p * 1.2));
-        float lowerMist = smoothstep(1.05, 0.0, vUv.y + fracMacro * 0.6) * bell;
-        float mistAmount = clamp((edgeBand * 0.65 + lowerMist * 0.55) * (0.55 + fogWisp * 0.65), 0.0, 0.82);
-        vec3 fogTint = vec3(0.42, 0.45, 0.51);
+        float lowerMist = (1.0 - smoothstep(0.0, 1.05, vUv.y + fracMacro * 0.6)) * bell;
+        float mistAmount = clamp((edgeBand * 0.65 + lowerMist * 0.55 + impulseField * 0.22) * (0.55 + fogWisp * 0.65), 0.0, 0.82);
+        vec3 fogTint = vec3(0.50, 0.54, 0.60);
         composited = mix(composited, fogTint, mistAmount);
 
         gl_FragColor = vec4(composited, 1.0);

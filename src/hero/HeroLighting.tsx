@@ -21,13 +21,13 @@ export function HeroLighting({ enableShadows }: HeroLightingProps) {
     const brickVis = introStage.brickReveal;
 
     if (hemiRef.current) {
-      hemiRef.current.intensity = 0.34 + brickVis * 0.22 + warmth * 0.2;
+      hemiRef.current.intensity = 0.28 + brickVis * 0.16 + warmth * 0.12;
     }
     if (keyRef.current) {
-      keyRef.current.intensity = 0.26 + brickVis * 0.52 + warmth * 0.58;
+      keyRef.current.intensity = 0.26 + brickVis * 0.48 + warmth * 0.68;
     }
     if (rimRef.current) {
-      rimRef.current.intensity = 0.16 + warmth * 0.32;
+      rimRef.current.intensity = 0.12 + warmth * 0.25;
     }
   });
 

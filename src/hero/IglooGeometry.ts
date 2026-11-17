@@ -14,6 +14,18 @@ export interface IglooBrickMeta {
   seed: number;
   tone: number;
   code: string;
+  wavePos: number;
+}
+
+const STABLE_TELEMETRY_CODES = [
+  '01', '04', '05', '16', '25', '26', '27', '47',
+  '08', '12', '19', '31', '38', '42', '54', '63',
+] as const;
+
+function computeBrickWavePos(pos: THREE.Vector3, domeRadius: number): number {
+  const normalizedX = THREE.MathUtils.clamp((pos.x + domeRadius) / (domeRadius * 2), 0, 1);
+  const normalizedY = THREE.MathUtils.clamp(pos.y / (domeRadius * 0.96), 0, 1);
+  return THREE.MathUtils.clamp(normalizedX * 0.55 + (1 - normalizedY) * 0.45, 0, 1);
 }
 
 /**
@@ -141,7 +153,8 @@ export function buildIglooBricks(): IglooBrickMeta[] {
         isInteractive: row >= 1,
         seed: rand(),
         tone: rand(),
-        code: String(11 + ((id * 7 + 13) % 79)),
+        code: STABLE_TELEMETRY_CODES[id % STABLE_TELEMETRY_CODES.length],
+        wavePos: computeBrickWavePos(basePos, domeRadius),
       });
     }
   }
@@ -181,7 +194,8 @@ export function buildIglooBricks(): IglooBrickMeta[] {
       isInteractive: true,
       seed: rand(),
       tone: rand(),
-      code: String(11 + ((id * 7 + 13) % 79)),
+      code: STABLE_TELEMETRY_CODES[id % STABLE_TELEMETRY_CODES.length],
+      wavePos: computeBrickWavePos(basePos, domeRadius),
     });
   }
 
@@ -206,9 +220,10 @@ export function buildIglooBricks(): IglooBrickMeta[] {
       const baseQuat = new THREE.Quaternion().setFromRotationMatrix(basis);
 
       const id = idCounter++;
+      const tunnelPos = new THREE.Vector3(x, y, zPos);
       bricks.push({
         id,
-        basePos: new THREE.Vector3(x, y, zPos),
+        basePos: tunnelPos,
         baseQuat,
         outwardDir: radial,
         scale: new THREE.Vector3(0.49, 0.5, 0.6),
@@ -218,16 +233,18 @@ export function buildIglooBricks(): IglooBrickMeta[] {
         isInteractive: false,
         seed: rand(),
         tone: rand(),
-        code: String(11 + ((id * 7 + 13) % 79)),
+        code: STABLE_TELEMETRY_CODES[id % STABLE_TELEMETRY_CODES.length],
+        wavePos: computeBrickWavePos(tunnelPos, domeRadius),
       });
     }
 
     // Grounded vertical side pier jamb stones connecting arch curve cleanly down to bedrock
     for (const side of [-1, 1] as const) {
       const id = idCounter++;
+      const jambPos = new THREE.Vector3(side * courseRadius * 0.98, 0.2, zPos);
       bricks.push({
         id,
-        basePos: new THREE.Vector3(side * courseRadius * 0.98, 0.2, zPos),
+        basePos: jambPos,
         baseQuat: new THREE.Quaternion(),
         outwardDir: new THREE.Vector3(side, 0.1, 0).normalize(),
         scale: new THREE.Vector3(0.46, 0.46, 0.58),
@@ -237,7 +254,8 @@ export function buildIglooBricks(): IglooBrickMeta[] {
         isInteractive: false,
         seed: rand(),
         tone: rand(),
-        code: String(11 + ((id * 7 + 13) % 79)),
+        code: STABLE_TELEMETRY_CODES[id % STABLE_TELEMETRY_CODES.length],
+        wavePos: computeBrickWavePos(jambPos, domeRadius),
       });
     }
   }

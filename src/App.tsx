@@ -1,5 +1,5 @@
-import { SocialSelector } from './particles/Sculpture';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SocialSelector } from './particles/Selector';
 import { HeroExperience } from './hero/HeroExperience';
 import type { IntroTimelineController } from './hero/IntroTimeline';
 import { useHeroSelector } from './hero/heroStore';

@@ -2,10 +2,13 @@ import { useEffect, useRef } from 'react';
 import { introStage, useHeroSelector } from '../hero/heroStore';
 
 /**
- * 0.0-0.5s empty #A0A5B1 opening state with a tiny central loading mark
- * that dissolves as the 3D construction line network ignites.
+ * Real preparation milestones fade into the existing construction introduction.
  */
 export function LoadingScreen() {
+  const loadingStep = useHeroSelector((s) => s.loadingStep);
+  const loadingFailed = useHeroSelector((s) => s.loadingFailed);
+  const statuses = ['Preparing the landscape', 'Preparing the light', 'Ready'];
+  const status = loadingFailed ? 'The scene could not start. Reload to try again.' : statuses[loadingStep];
   const assetsReady = useHeroSelector((s) => s.assetsReady);
   const replayNonce = useHeroSelector((s) => s.replayNonce);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -14,21 +17,28 @@ export function LoadingScreen() {
     let raf = 0;
     const syncMark = () => {
       if (overlayRef.current) {
-        const op = assetsReady ? introStage.loadingMarkOpacity : 1;
+        const op = assetsReady && !loadingFailed ? introStage.loadingMarkOpacity : 1;
         overlayRef.current.style.opacity = op.toFixed(3);
         overlayRef.current.style.visibility = op > 0.02 ? 'visible' : 'hidden';
       }
-      if (introStage.loadingMarkOpacity > 0.01 || !assetsReady) {
+      if (introStage.loadingMarkOpacity > 0.01 || !assetsReady || loadingFailed) {
         raf = requestAnimationFrame(syncMark);
       }
     };
     raf = requestAnimationFrame(syncMark);
     return () => cancelAnimationFrame(raf);
-  }, [assetsReady, replayNonce]);
+  }, [assetsReady, replayNonce, loadingFailed]);
 
   return (
-    <div ref={overlayRef} className="loading-overlay" aria-hidden="true">
-      <div className="loading-mark" />
+    <div ref={overlayRef} className="loading-overlay" data-failed={loadingFailed}>
+      <div className="loading-content" role="status" aria-live="polite">
+        <span className="loading-wordmark" aria-hidden="true">IGLOO</span>
+        <span className="loading-steps" aria-hidden="true">
+          {[0, 1, 2].map(step => <span key={step} data-complete={step <= loadingStep} />)}
+        </span>
+        <span className="loading-status">{status}</span>
+        {loadingFailed && <a className="loading-retry" href={window.location.href}>Reload</a>}
+      </div>
     </div>
   );
 }

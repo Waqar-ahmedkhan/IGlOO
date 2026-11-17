@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { clamp } from '../utils/noise';
+import { clamp, smoothstep } from '../utils/noise';
 import { damp } from '../utils/damping';
 
 export type ScrollStateName =
@@ -54,6 +54,13 @@ export function classifyScrollState(p: number): ScrollStateName {
   return 'particle-stage';
 }
 
+/** More input distance for the portfolio and overhead reveal; the scene timeline stays reversible. */
+export function getScrollPacing(progress: number): number {
+  return 1 - 0.56 * smoothstep(0.23, 0.43, progress)
+    + 0.18 * smoothstep(0.9, 1.04, progress)
+    - 0.14 * smoothstep(1.31, 1.38, progress);
+}
+
 // 60fps imperative scroll controller signals (never causes per-frame React re-renders)
 export const scrollDirector = {
   scrollProgress: 0,
@@ -62,6 +69,9 @@ export const scrollDirector = {
   direction: 1 as 1 | -1,
   stateName: 'hero-rest' as ScrollStateName,
   paused: false,
+  loopProgress: 0,
+  loopTarget: 0,
+  loopTransitioning: false,
 
   setPaused(paused: boolean) {
     this.paused = paused;
@@ -71,10 +81,42 @@ export const scrollDirector = {
     }
   },
 
+  triggerLoop() {
+    if (this.paused) return;
+    this.scrollProgress = EXPERIENCE_MAX_SCROLL;
+    this.targetScroll = EXPERIENCE_MAX_SCROLL;
+    this.velocity = 0;
+    this.direction = 1;
+    this.loopTransitioning = true;
+    this.loopTarget = 1.05;
+  },
+
+  prepareDirection(impulse: number) {
+    if (impulse === 0) return;
+    const nextDirection = impulse > 0 ? 1 : -1;
+    if (nextDirection !== this.direction) {
+      this.velocity = 0;
+      this.targetScroll = this.scrollProgress;
+      if (nextDirection < 0 && !this.loopTransitioning) {
+        this.loopTarget = 0;
+      }
+    }
+    this.direction = nextDirection;
+  },
+
   applyWheelImpulse(deltaY: number) {
     if (this.paused) return;
-    const step = clamp(deltaY * 0.00028, -0.045, 0.045);
-    this.velocity = clamp(this.velocity + step * 1.15, -0.26, 0.26);
+    this.prepareDirection(deltaY);
+    const step = clamp(deltaY * 0.00022, -0.028, 0.028);
+    if (deltaY > 0 && this.scrollProgress >= EXPERIENCE_MAX_SCROLL - 0.018) {
+      this.loopTarget = clamp(this.loopTarget + Math.abs(step) * 4.2, 0, 1.05);
+      if (this.loopTarget >= 0.32) {
+        this.loopTransitioning = true;
+        this.loopTarget = 1.05;
+      }
+      return;
+    }
+    this.velocity = clamp(this.velocity + step * 1.15, -0.16, 0.16);
     if (Math.abs(step) > 1e-5) {
       this.direction = step > 0 ? 1 : -1;
     }
@@ -82,8 +124,17 @@ export const scrollDirector = {
 
   applyTouchImpulse(deltaY: number) {
     if (this.paused) return;
-    const step = clamp(deltaY * 0.00055, -0.05, 0.05);
-    this.velocity = clamp(this.velocity + step * 1.1, -0.24, 0.24);
+    this.prepareDirection(deltaY);
+    const step = clamp(deltaY * 0.00044, -0.032, 0.032);
+    if (deltaY > 0 && this.scrollProgress >= EXPERIENCE_MAX_SCROLL - 0.018) {
+      this.loopTarget = clamp(this.loopTarget + Math.abs(step) * 4.2, 0, 1.05);
+      if (this.loopTarget >= 0.32) {
+        this.loopTransitioning = true;
+        this.loopTarget = 1.05;
+      }
+      return;
+    }
+    this.velocity = clamp(this.velocity + step * 1.1, -0.16, 0.16);
     if (Math.abs(step) > 1e-5) {
       this.direction = step > 0 ? 1 : -1;
     }
@@ -91,14 +142,22 @@ export const scrollDirector = {
 
   applyKeyStep(delta: number) {
     if (this.paused) return;
-    this.velocity = clamp(this.velocity + delta * 0.38, -0.24, 0.24);
-    this.targetScroll = clamp(this.targetScroll + delta * 0.45, 0, EXPERIENCE_MAX_SCROLL);
+    this.prepareDirection(delta);
+    if (delta > 0 && this.scrollProgress >= EXPERIENCE_MAX_SCROLL - 0.018) {
+      this.triggerLoop();
+      return;
+    }
+    this.velocity = clamp(this.velocity + delta * 0.3, -0.16, 0.16);
+    this.targetScroll = clamp(this.targetScroll + delta * 0.45 * getScrollPacing(this.targetScroll), 0, EXPERIENCE_MAX_SCROLL);
     this.direction = delta >= 0 ? 1 : -1;
   },
 
   setImmediate(p: number) {
     const clamped = clamp(p, 0, EXPERIENCE_MAX_SCROLL);
     this.velocity = 0;
+    this.loopProgress = 0;
+    this.loopTarget = 0;
+    this.loopTransitioning = false;
     this.targetScroll = clamped;
     this.scrollProgress = clamped;
     this.stateName = classifyScrollState(clamped);
@@ -116,17 +175,35 @@ export const scrollDirector = {
       return;
     }
 
+    if (this.loopTarget > 0 || this.loopProgress > 0.0001) {
+      if (!this.loopTransitioning && this.velocity <= 0.0005) {
+        this.loopTarget = damp(this.loopTarget, 0, 6.0, dt);
+      }
+      const loopLambda = reducedMotion ? 9.5 : 3.8;
+      this.loopProgress = damp(this.loopProgress, Math.min(1, this.loopTarget), loopLambda, dt);
+      if (this.loopTransitioning && this.loopProgress >= 0.992) {
+        this.setImmediate(0);
+        return;
+      }
+      if (!this.loopTransitioning && this.loopProgress < 0.001 && this.loopTarget < 0.001) {
+        this.loopProgress = 0;
+        this.loopTarget = 0;
+      }
+    }
+
     // Integrate velocity into target with smooth frame-rate-independent friction
     if (Math.abs(this.velocity) > 0.00008) {
-      this.targetScroll = clamp(this.targetScroll + this.velocity * dt * 2.4, 0, EXPERIENCE_MAX_SCROLL);
-      const friction = reducedMotion ? 10.5 : 5.4;
-      this.velocity *= Math.exp(-friction * dt);
+      const friction = reducedMotion ? 10.5 : 7;
+      const decay = Math.exp(-friction * dt);
+      const travel = this.velocity * (1 - decay) / friction;
+      this.targetScroll = clamp(this.targetScroll + travel * 2.4 * getScrollPacing(this.targetScroll), 0, EXPERIENCE_MAX_SCROLL);
+      this.velocity *= decay;
     } else {
       this.velocity = 0;
     }
 
     const prev = this.scrollProgress;
-    const dampLambda = reducedMotion ? 12.0 : 5.8;
+    const dampLambda = reducedMotion ? 12.0 : 4.4;
     this.scrollProgress = damp(this.scrollProgress, this.targetScroll, dampLambda, dt);
     if (Math.abs(this.scrollProgress - this.targetScroll) < 0.00005) {
       this.scrollProgress = this.targetScroll;

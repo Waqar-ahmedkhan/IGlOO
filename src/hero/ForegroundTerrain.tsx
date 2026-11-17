@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { fbm2D, ridgedFbm2D, smoothstep } from '../utils/noise';
-import { introStage } from './heroStore';
+import { heroStore, introStage } from './heroStore';
 
 export const IGLOO_WORLD_X_DESKTOP = 0.28;
 export const IGLOO_WORLD_Z = 0.0;
@@ -70,6 +70,7 @@ export function ForegroundTerrain({ segments, iglooX }: ForegroundTerrainProps) 
   const uniformsRef = useRef({
     uRadius: { value: 0 },
     uEmerge: { value: 0 },
+    uWaveFill: { value: 0 },
     uIglooPos: { value: new THREE.Vector2(iglooX, IGLOO_WORLD_Z) },
   });
 
@@ -102,6 +103,7 @@ export function ForegroundTerrain({ segments, iglooX }: ForegroundTerrainProps) 
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uRadius = uniformsRef.current.uRadius;
       shader.uniforms.uEmerge = uniformsRef.current.uEmerge;
+      shader.uniforms.uWaveFill = uniformsRef.current.uWaveFill;
       shader.uniforms.uIglooPos = uniformsRef.current.uIglooPos;
 
       shader.vertexShader = shader.vertexShader
@@ -125,6 +127,7 @@ export function ForegroundTerrain({ segments, iglooX }: ForegroundTerrainProps) 
           `#include <common>
           uniform float uRadius;
           uniform float uEmerge;
+          uniform float uWaveFill;
           uniform vec2 uIglooPos;
           varying vec3 vFgWorldPos;
           varying vec3 vFgWorldNormal;
@@ -198,7 +201,7 @@ export function ForegroundTerrain({ segments, iglooX }: ForegroundTerrainProps) 
           vec3 midGranite = vec3(0.23, 0.255, 0.305);
           vec3 slateRock = mix(darkSlate, midGranite, fineStrata);
 
-          vec3 frostDust = mix(vec3(0.34, 0.37, 0.43), vec3(0.54, 0.58, 0.65), smoothstep(0.22, 0.84, rockGrain * 0.65 + screeCrease * 0.35));
+          vec3 frostDust = mix(vec3(0.25, 0.28, 0.34), vec3(0.43, 0.47, 0.54), smoothstep(0.22, 0.84, rockGrain * 0.65 + screeCrease * 0.35));
           vec3 groundCol = mix(frostDust, slateRock, slopeRock * 0.72);
 
           // Grounded contact AO under igloo perimeter & entrance arch
@@ -211,19 +214,20 @@ export function ForegroundTerrain({ segments, iglooX }: ForegroundTerrainProps) 
         .replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
-          // Soft white-blue glow beside arch during construction scan, settling cleanly in final hero
+          // Soft white-blue glow beside arch during construction scan + dynamic doorway & snow fill during wave
           vec2 doorCenter = uIglooPos + vec2(0.95, 2.35);
           float doorDist = length(vFgWorldPos.xz - doorCenter);
           float constructMask = smoothstep(0.05, 0.25, uRadius) * (1.0 - smoothstep(0.48, 0.85, uRadius));
-          float doorSpill = exp(-doorDist * doorDist * 0.28) * 0.42 * constructMask;
+          float doorSpill = exp(-doorDist * doorDist * 0.28) * (0.42 * constructMask + 0.14 * uEmerge + 0.32 * uWaveFill);
 
           // Crisp icy scan rim at outer boundary of radial terrain reveal (uploaded_media_2)
           float radD = length(vFgWorldPos.xz - uIglooPos);
+          float snowFill = exp(-max(0.0, radD - 2.2) * 0.55) * 0.18 * uWaveFill;
           float jagged = (fgFbm(vFgWorldPos.xz * 0.45) - 0.5) * 2.8 + (fgNoise(vFgWorldPos.xz * 1.65) - 0.5) * 1.1;
           float distEdge = pow(max(uRadius, 0.0), 2.25) * 86.0 - (radD + jagged);
           float scanRim = smoothstep(1.9, 0.0, distEdge) * step(0.0, distEdge) * (1.0 - smoothstep(0.68, 0.94, uRadius));
 
-          totalEmissiveRadiance += vec3(0.84, 0.92, 1.0) * (doorSpill + scanRim * 0.68);`,
+          totalEmissiveRadiance += vec3(0.88, 0.94, 0.99) * (doorSpill + snowFill + scanRim * 0.68);`,
         );
     };
 
@@ -248,6 +252,8 @@ export function ForegroundTerrain({ segments, iglooX }: ForegroundTerrainProps) 
     }
     uniformsRef.current.uRadius.value = r;
     uniformsRef.current.uEmerge.value = introStage.mountainEmerge;
+    const hScroll = heroStore.getState().heroScroll;
+    uniformsRef.current.uWaveFill.value = smoothstep(0.18, 0.55, hScroll) * (1 - smoothstep(0.7, 0.95, hScroll));
   });
 
   return (

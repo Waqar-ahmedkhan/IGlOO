@@ -4,13 +4,14 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 import { createSeededRandom, smoothstep } from '../utils/noise';
+import { PORTAL_LAYOUT } from './layout';
 
 interface FrostGapProps {
   progressRef: React.MutableRefObject<number>;
   reducedMotion: boolean;
 }
 
-/** Loose 3D chips, fine snow and a fractured light lattice in the open inner-rim gap. */
+/** Frost sits on the shell surface; the annular gap stays open and uncluttered. */
 export function FrostGap({ progressRef, reducedMotion }: FrostGapProps) {
   const group = useRef<THREE.Group>(null);
   const chips = useRef<THREE.InstancedMesh>(null);
@@ -19,7 +20,7 @@ export function FrostGap({ progressRef, reducedMotion }: FrostGapProps) {
   const snowMaterial = useRef<THREE.PointsMaterial>(null);
   const snow = useRef<THREE.Points>(null);
   const { size } = useThree();
-  const chipCount = size.width < 768 ? 48 : 96;
+  const chipCount = size.width < 768 ? 24 : 48;
   const transform = useMemo(() => new THREE.Object3D(), []);
   const lastProgress = useRef(-1);
   const resources = useMemo(() => {
@@ -27,15 +28,15 @@ export function FrostGap({ progressRef, reducedMotion }: FrostGapProps) {
     const chipGeometry = new THREE.OctahedronGeometry(1, 0);
     const specs = Array.from({ length: chipCount }, () => ({
       angle: random() * Math.PI * 2,
-      radius: 2.22 + random() * 0.38,
+      radius: PORTAL_LAYOUT.surfaceFrostInner + random() * (PORTAL_LAYOUT.surfaceFrostOuter - PORTAL_LAYOUT.surfaceFrostInner),
       depth: (random() - 0.5) * 0.65,
-      length: 0.025 + random() * 0.07,
+      length: 0.018 + random() * 0.04,
       tilt: random() * Math.PI,
     }));
     const vertices: THREE.Vector3[] = [];
     for (let i = 0; i < 180; i++) {
       const angle = i / 180 * Math.PI * 2 + (random() - 0.5) * 0.018;
-      const radius = 2.18 + random() * 0.45;
+      const radius = PORTAL_LAYOUT.surfaceFrostInner + random() * 0.45;
       vertices.push(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, (random() - 0.5) * 0.2));
     }
     const edges: number[] = [];
@@ -50,7 +51,7 @@ export function FrostGap({ progressRef, reducedMotion }: FrostGapProps) {
     const snowPositions = new Float32Array((chipCount * 12) * 3);
     for (let i = 0; i < snowPositions.length / 3; i++) {
       const angle = random() * Math.PI * 2;
-      const radius = 2.16 + random() * 0.51;
+      const radius = PORTAL_LAYOUT.surfaceFrostInner + random() * 0.45;
       snowPositions.set([Math.cos(angle) * radius, Math.sin(angle) * radius, (random() - 0.5) * 0.8], i * 3);
     }
     const snowGeometry = new THREE.BufferGeometry();
@@ -86,15 +87,15 @@ export function FrostGap({ progressRef, reducedMotion }: FrostGapProps) {
       chips.current.instanceMatrix.needsUpdate = true;
       lastProgress.current = p;
     }
-    if (chipMaterial.current) chipMaterial.current.emissiveIntensity = 0.05 + energy * 0.65;
-    if (latticeMaterial.current) latticeMaterial.current.opacity = energy * 0.16;
-    if (snowMaterial.current) snowMaterial.current.opacity = assembled * (0.18 + energy * 0.22);
+    if (chipMaterial.current) chipMaterial.current.emissiveIntensity = 0.02 + energy * 0.045;
+    if (latticeMaterial.current) latticeMaterial.current.opacity = energy * 0.045;
+    if (snowMaterial.current) snowMaterial.current.opacity = assembled * (0.06 + energy * 0.1);
     if (snow.current) snow.current.rotation.z = reducedMotion ? 0 : Math.sin(clock.elapsedTime * 0.12) * 0.025;
   });
 
   return <group ref={group}>
     <instancedMesh ref={chips} args={[resources.chipGeometry, undefined, chipCount]} frustumCulled={false}>
-      <meshStandardMaterial ref={chipMaterial} color='#c5d2df' emissive='#c4e9ff' metalness={0.25} roughness={0.65} />
+      <meshStandardMaterial ref={chipMaterial} color='#c5d2df' emissive='#c4e9ff' metalness={0.05} roughness={0.88} />
     </instancedMesh>
     <lineSegments geometry={resources.lattice}>
       <lineBasicMaterial ref={latticeMaterial} color='#e1f2ff' transparent opacity={0} depthWrite={false} />

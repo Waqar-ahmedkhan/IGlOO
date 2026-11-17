@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, createPortal, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { createIntroTimeline, type IntroTimelineController } from './IntroTimeline';
@@ -11,16 +11,35 @@ import { ConstructionNetwork } from './ConstructionNetwork';
 import { IglooBrickInteraction } from './IglooBrickInteraction';
 import { SmokyWind } from './SmokyWind';
 import { HeroCamera } from './HeroCamera';
-import { heroStore, hudBridge, introStage } from './heroStore';
+import { heroStore, hudBridge, introStage, useHeroSelector } from './heroStore';
 import { soundController } from './SoundController';
 import { clamp } from '../utils/noise';
 import type { PerformanceProfile } from '../utils/performance';
-import { scrollDirector } from '../experience/ScrollDirector';
+import { scrollDirector, useScrollStateSelector } from '../experience/ScrollDirector';
 import { computeHeroExitSignals, type HeroExitSignals } from '../experience/HeroExitAnimation';
 import { createFrostTransitionMaterial } from '../shaders/frostTransitionMaterial';
-import { AtmosphericScene } from '../scenes/AtmosphericScene';
 import { getProjectByPathname, type PortfolioProjectId } from '../portfolio/projects';
 import { portfolioHudBridge, portfolioStore } from '../portfolio/portfolioStore';
+
+const AtmosphericScene = lazy(() =>
+  import('../scenes/AtmosphericScene').then(module => ({ default: module.AtmosphericScene })),
+);
+
+function ScenePrepared({ onReady, onFailure }: { onReady: () => void; onFailure: () => void }) {
+  const { gl, scene, camera } = useThree();
+
+  useEffect(() => {
+    let active = true;
+    const frame = requestAnimationFrame(() => {
+      void gl.compileAsync(scene, camera)
+        .then(() => { if (active) onReady(); })
+        .catch(() => { if (active) onFailure(); });
+    });
+    return () => { active = false; cancelAnimationFrame(frame); };
+  }, [gl, scene, camera, onReady, onFailure]);
+
+  return null;
+}
 
 interface HeroSceneStageProps {
   profile: PerformanceProfile;
@@ -89,11 +108,41 @@ interface ExperienceStageProps {
 
 function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
   const { gl, size, viewport } = useThree();
+  const introReady = useHeroSelector(state => state.assetsReady && state.introComplete);
+  const onPreparationFailure = useCallback(() => heroStore.setState({ loadingFailed: true }), []);
+  const approachingAtmosphere = useScrollStateSelector(state => state.scrollPct >= 12);
+  const [mountAtmosphere, setMountAtmosphere] = useState(() => Boolean(getProjectByPathname(window.location.pathname)));
+  const atmosphereReady = useRef(false);
+  const readySignal = useMemo(() => {
+    let resolve = () => {};
+    const promise = new Promise<void>(done => { resolve = done; });
+    return { promise, resolve };
+  }, []);
+  const onAtmosphereReady = useCallback(() => {
+    atmosphereReady.current = true;
+    readySignal.resolve();
+  }, [readySignal]);
+
+  useEffect(() => {
+    if (mountAtmosphere) return;
+    if (approachingAtmosphere) { setMountAtmosphere(true); return; }
+    if (!introReady) return;
+    let idle: number | undefined;
+    const timer = window.setTimeout(() => {
+      if ('requestIdleCallback' in window) idle = window.requestIdleCallback(() => setMountAtmosphere(true), { timeout: 1800 });
+      else setMountAtmosphere(true);
+    }, 700);
+    return () => { clearTimeout(timer); if (idle !== undefined) window.cancelIdleCallback(idle); };
+  }, [approachingAtmosphere, mountAtmosphere, introReady]);
+
   const pointerNdcRef = useRef(new THREE.Vector2(0, 0));
   const pointerActiveRef = useRef(false);
   const scrollProgressRef = useRef(0);
+  const heroScrollProgressRef = useRef(0);
   const smokeIntensityRef = useRef(0.35);
   const lastDissolveRef = useRef(0);
+  const dollyWhooshedRef = useRef(false);
+  const loopWhooshedRef = useRef(false);
 
   const exitSignalsRef = useRef<HeroExitSignals>(
     computeHeroExitSignals(0, profile.reducedMotion),
@@ -116,17 +165,19 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
   const rtHeroRef = useRef<THREE.WebGLRenderTarget | null>(null);
   const rtAtmoRef = useRef<THREE.WebGLRenderTarget | null>(null);
 
-  useMemo(() => {
+  useEffect(() => {
     const quad = new THREE.Mesh(quadGeom, frostMat);
     quad.frustumCulled = false;
     quadScene.add(quad);
+    return () => { quadScene.remove(quad); };
   }, [quadScene, quadGeom, frostMat]);
 
   // Allocate & resize reusable render targets cleanly
   useEffect(() => {
+    if (!mountAtmosphere) return;
     const rtType = gl.capabilities.isWebGL2 ? THREE.HalfFloatType : THREE.UnsignedByteType;
-    const w = Math.max(1, Math.floor(size.width * viewport.dpr));
-    const h = Math.max(1, Math.floor(size.height * viewport.dpr));
+    const w = Math.max(1, Math.floor(size.width * viewport.dpr * profile.renderTargetScale));
+    const h = Math.max(1, Math.floor(size.height * viewport.dpr * profile.renderTargetScale));
 
     if (!rtHeroRef.current || !rtAtmoRef.current) {
       const opts: THREE.RenderTargetOptions = {
@@ -142,7 +193,7 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
       rtHeroRef.current.setSize(w, h);
       rtAtmoRef.current.setSize(w, h);
     }
-  }, [gl, size.width, size.height, viewport.dpr]);
+  }, [gl, size.width, size.height, viewport.dpr, profile.renderTargetScale, mountAtmosphere]);
 
   useEffect(() => {
     return () => {
@@ -155,38 +206,39 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
     };
   }, [quadGeom, frostMat]);
 
-  // Initialize & launch GSAP 6.5s intro timeline once both scenes compile cleanly (or deep-link straight to project)
+  // Prepare the hero first; project deep links also wait for the atmospheric scene.
   useEffect(() => {
     const introWasComplete = heroStore.getState().introComplete;
     const controller = createIntroTimeline(profile.reducedMotion);
     timelineRef.current = controller;
 
+    let active = true;
     const raf = requestAnimationFrame(() => {
-      try {
-        gl.compile(heroScene, heroCamera);
-        gl.compile(atmoScene, atmoCamera);
-      } catch {
-        // Non-fatal driver compile guard
-      }
-      heroStore.setState({ assetsReady: true });
-
-      const deepLinked =
-        typeof window !== 'undefined' ? getProjectByPathname(window.location.pathname) : null;
-      if (deepLinked) {
-        controller.skip();
-        scrollDirector.setImmediate(deepLinked.focusScroll);
-        scrollProgressRef.current = deepLinked.focusScroll;
-        portfolioStore.openProject(deepLinked.id, { pushHistory: false });
-      } else if (introWasComplete) {
-        controller.skip();
-      } else {
-        controller.start();
-      }
+      heroStore.setState({ loadingStep: 1 });
+      void gl.compileAsync(heroScene, heroCamera).then(async () => {
+        if (!active) return;
+        const deepLinked =
+          typeof window !== 'undefined' ? getProjectByPathname(window.location.pathname) : null;
+        if (deepLinked) {
+          await readySignal.promise;
+          if (!active) return;
+          controller.skip();
+          scrollDirector.setImmediate(deepLinked.focusScroll);
+          scrollProgressRef.current = deepLinked.focusScroll;
+          portfolioStore.openProject(deepLinked.id, { pushHistory: false });
+        } else if (introWasComplete) {
+          controller.skip();
+        } else {
+          controller.start();
+        }
+        heroStore.setState({ assetsReady: true, loadingStep: 2 });
+      }).catch(() => { if (active) onPreparationFailure(); });
     });
 
     const onPopState = () => {
       const targetProject = getProjectByPathname(window.location.pathname);
       if (targetProject) {
+        setMountAtmosphere(true);
         controller.skip();
         if (scrollDirector.scrollProgress < 0.45) {
           scrollDirector.setImmediate(targetProject.focusScroll);
@@ -201,12 +253,13 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
     window.addEventListener('popstate', onPopState);
 
     return () => {
+      active = false;
       cancelAnimationFrame(raf);
       window.removeEventListener('popstate', onPopState);
       controller.dispose();
       timelineRef.current = null;
     };
-  }, [gl, heroScene, atmoScene, heroCamera, atmoCamera, profile.reducedMotion, timelineRef]);
+  }, [gl, heroScene, atmoScene, heroCamera, atmoCamera, profile.reducedMotion, timelineRef, readySignal, onPreparationFailure]);
 
   // Velocity-based wheel, touch & keyboard listeners for reversible Phase 1 + Phase 2 scroll choreography
   useEffect(() => {
@@ -350,31 +403,67 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
   // Master priority=1 render director: advances scroll kinematics + draws active / dual-FBO frost composite
   useFrame((state, delta) => {
     if (typeof document !== 'undefined' && document.hidden) return;
+    if (!heroStore.getState().assetsReady) {
+      gl.setRenderTarget(null);
+      gl.setClearColor('#A0A5B1');
+      gl.clear();
+      return;
+    }
     const dt = Math.min(delta, 0.05);
 
-    if (heroStore.getState().introComplete) {
+    if (heroStore.getState().introComplete && (atmosphereReady.current || scrollDirector.scrollProgress < 0.3)) {
       scrollDirector.step(dt, profile.reducedMotion);
     }
 
+    if (!atmosphereReady.current && scrollDirector.scrollProgress > 0.3) {
+      scrollDirector.scrollProgress = 0.3;
+      scrollDirector.velocity = 0;
+    }
     const p = scrollDirector.scrollProgress;
+    const loopProg = scrollDirector.loopProgress;
     scrollProgressRef.current = p;
 
-    const exit = computeHeroExitSignals(p, profile.reducedMotion);
+    const heroP = loopProg > 0.002 ? 0 : p;
+    heroScrollProgressRef.current = heroP;
+
+    const exit = computeHeroExitSignals(heroP, profile.reducedMotion);
     exitSignalsRef.current = exit;
     smokeIntensityRef.current = exit.smokeIntensity;
 
-    const prevScroll = heroStore.getState().heroScroll;
-    if (Math.abs(prevScroll - clamp(p / 0.45, 0, 1)) > 0.002) {
-      heroStore.setState({ heroScroll: clamp(p / 0.45, 0, 1) });
+    // Trigger Layer F directional camera dolly whoosh during State C pullback & Loop return
+    if (p > 0.215 && p < 0.34) {
+      if (!dollyWhooshedRef.current && Math.abs(scrollDirector.velocity) > 0.002) {
+        dollyWhooshedRef.current = true;
+        soundController.playCameraWhoosh(0.5);
+      }
+    } else if (p < 0.16 || p > 0.38) {
+      dollyWhooshedRef.current = false;
     }
 
-    if (Math.abs(lastDissolveRef.current - exit.uiDissolve) > 0.006) {
-      lastDissolveRef.current = exit.uiDissolve;
-      hudBridge.uiDissolve = exit.uiDissolve;
+    if (loopProg > 0.04) {
+      if (!loopWhooshedRef.current) {
+        loopWhooshedRef.current = true;
+        soundController.playCameraWhoosh(0.65);
+      }
+    } else {
+      loopWhooshedRef.current = false;
+    }
+
+    const prevScroll = heroStore.getState().heroScroll;
+    const targetHeroScroll = loopProg > 0.002 ? 1 - loopProg : clamp(p / 0.45, 0, 1);
+    if (Math.abs(prevScroll - targetHeroScroll) > 0.002) {
+      heroStore.setState({ heroScroll: targetHeroScroll });
+    }
+
+    const effectiveDissolve = loopProg > 0.002 ? Math.max(0, 1 - loopProg * 1.25) : exit.uiDissolve;
+    if (Math.abs(lastDissolveRef.current - effectiveDissolve) > 0.006) {
+      lastDissolveRef.current = effectiveDissolve;
+      hudBridge.uiDissolve = effectiveDissolve;
       hudBridge.emit();
     }
 
-    const frostBell = Math.sin(exit.frostProgress * Math.PI);
+    const activeFrost = loopProg > 0.002 ? loopProg : exit.frostProgress;
+    const frostBell = Math.sin(activeFrost * Math.PI);
     soundController.updateExperienceAtmosphere(
       p,
       exit.activation,
@@ -386,9 +475,49 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
     const rtHero = rtHeroRef.current;
     const rtAtmo = rtAtmoRef.current;
 
-    if (exit.frostProgress <= 0.002 || !rtHero || !rtAtmo) {
-      gl.setRenderTarget(null);
+    if (loopProg > 0.002 && rtHero && rtAtmo) {
+      // Seamless infinite loop transition: wipe from Particle Stage (atmoScene) back to Hero Igloo (heroScene at 0)
+      gl.setRenderTarget(rtAtmo);
+      gl.clear();
+      gl.render(atmoScene, atmoCamera);
+
+      gl.setRenderTarget(rtHero);
+      gl.clear();
       gl.render(heroScene, heroCamera);
+
+      frostUniforms.tFrom.value = rtAtmo.texture;
+      frostUniforms.tTo.value = rtHero.texture;
+      frostUniforms.uProgress.value = loopProg;
+      frostUniforms.uOpticalImpulse.value = 0;
+      frostUniforms.uDirection.value = 1;
+      frostUniforms.uVelocity.value = 0.08;
+      frostUniforms.uTime.value = state.clock.elapsedTime;
+      frostUniforms.uAspect.value = size.width / Math.max(1, size.height);
+
+      gl.setRenderTarget(null);
+      gl.render(quadScene, orthoCam);
+    } else if (exit.frostProgress <= 0.002 || !rtHero || !rtAtmo) {
+      if (exit.opticalImpulse > 0.012 && rtHero) {
+        // Localized lower-left foreground optical mist & refraction impulse during State C pullback
+        gl.setRenderTarget(rtHero);
+        gl.clear();
+        gl.render(heroScene, heroCamera);
+
+        frostUniforms.tFrom.value = rtHero.texture;
+        frostUniforms.tTo.value = rtHero.texture;
+        frostUniforms.uProgress.value = 0;
+        frostUniforms.uOpticalImpulse.value = exit.opticalImpulse;
+        frostUniforms.uDirection.value = scrollDirector.direction;
+        frostUniforms.uVelocity.value = scrollDirector.velocity;
+        frostUniforms.uTime.value = state.clock.elapsedTime;
+        frostUniforms.uAspect.value = size.width / Math.max(1, size.height);
+
+        gl.setRenderTarget(null);
+        gl.render(quadScene, orthoCam);
+      } else {
+        gl.setRenderTarget(null);
+        gl.render(heroScene, heroCamera);
+      }
     } else if (exit.frostProgress >= 0.998) {
       gl.setRenderTarget(null);
       gl.render(atmoScene, atmoCamera);
@@ -405,6 +534,7 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
       frostUniforms.tFrom.value = rtHero.texture;
       frostUniforms.tTo.value = rtAtmo.texture;
       frostUniforms.uProgress.value = exit.frostProgress;
+      frostUniforms.uOpticalImpulse.value = exit.opticalImpulse;
       frostUniforms.uDirection.value = scrollDirector.direction;
       frostUniforms.uVelocity.value = scrollDirector.velocity;
       frostUniforms.uTime.value = state.clock.elapsedTime;
@@ -423,7 +553,7 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
           heroCamera={heroCamera}
           pointerNdcRef={pointerNdcRef}
           pointerActiveRef={pointerActiveRef}
-          scrollProgressRef={scrollProgressRef}
+          scrollProgressRef={heroScrollProgressRef}
           exitSignalsRef={exitSignalsRef}
           smokeIntensityRef={smokeIntensityRef}
         />,
@@ -431,14 +561,17 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
         { camera: heroCamera, scene: heroScene },
       )}
 
-      {createPortal(
-        <AtmosphericScene
-          camera={atmoCamera}
-          pointerNdcRef={pointerNdcRef}
-          pointerActiveRef={pointerActiveRef}
-          scrollProgressRef={scrollProgressRef}
-          reducedMotion={profile.reducedMotion}
-        />,
+      {mountAtmosphere && createPortal(
+        <Suspense fallback={null}>
+          <AtmosphericScene
+            camera={atmoCamera}
+            pointerNdcRef={pointerNdcRef}
+            pointerActiveRef={pointerActiveRef}
+            scrollProgressRef={scrollProgressRef}
+            reducedMotion={profile.reducedMotion}
+          />
+          <ScenePrepared onReady={onAtmosphereReady} onFailure={onPreparationFailure} />
+        </Suspense>,
         atmoScene,
         { camera: atmoCamera, scene: atmoScene },
       )}

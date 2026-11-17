@@ -18,7 +18,7 @@ export function getFrostBumpTexture(): THREE.DataTexture {
       const px = Math.cos(nx * Math.PI * 2) * 2.4;
       const py = Math.sin(ny * Math.PI * 2) * 2.4;
       const f = fbm2D(px + 3.1, py + 7.4, 4);
-      const grain = (rand() - 0.5) * 0.25;
+      const grain = (rand() - 0.5) * 0.09;
       const v = Math.max(0, Math.min(255, Math.floor((0.5 + f * 0.44 + grain) * 255)));
       const idx = (y * size + x) * 4;
       data[idx] = v;
@@ -112,7 +112,7 @@ export function createIglooBrickMaterial(): {
     emissiveIntensity: 0.015,
   });
 
-  material.customProgramCacheKey = () => 'igloo-masonry-physical-v7';
+  material.customProgramCacheKey = () => 'igloo-masonry-physical-v8';
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uniforms.uTime;
@@ -177,14 +177,15 @@ export function createIglooBrickMaterial(): {
         '#include <clipping_planes_fragment>',
         `#include <clipping_planes_fragment>
         float revealJitter = (crackNoise(vLocalBrickPos.xz * 7.5 + vBrickTone * 11.0) - 0.5) * 0.16;
-        if (vIglooLocalY + revealJitter > uRevealHeight) discard;`,
+        // Reveal only during construction. Finished bricks may float above this plane.
+        if (uRevealHeight < 3.34 && vIglooLocalY + revealJitter > uRevealHeight) discard;`,
       )
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
         // Calibrated frosted silver-slate masonry (more whitish frosted highlight, crisp seams, uploaded_media_1794805197696)
-        vec3 darkStone = vec3(0.112, 0.128, 0.162);
-        vec3 frostedStone = vec3(0.285, 0.315, 0.368);
+        vec3 darkStone = vec3(0.072, 0.088, 0.118);
+        vec3 frostedStone = vec3(0.225, 0.255, 0.31);
         float texVar = crackNoise(vLocalBrickPos.xy * 6.5 + vBrickTone * 9.0);
         float microGrain = crackNoise(vLocalBrickPos.xy * 18.0 - vBrickTone * 5.0);
         float heightDust = smoothstep(0.08, 0.46, vLocalBrickPos.y) * 0.28;
@@ -217,16 +218,16 @@ export function createIglooBrickMaterial(): {
         float eSecond = (eAp.x + eAp.y + eAp.z) - eHi - eLo;
         float fineSeam = smoothstep(0.418, 0.458, eSecond);
         float softBevel = smoothstep(0.34, 0.45, eSecond);
-        float innerFaceMask = smoothstep(0.15, -0.45, vLocalBrickPos.z);
+        float innerFaceMask = (1.0 - smoothstep(-0.45, 0.15, vLocalBrickPos.z));
 
         float distReveal = uRevealHeight - vIglooLocalY;
-        float revealBand = smoothstep(0.28, 0.0, distReveal) * step(0.0, distReveal) * (1.0 - smoothstep(2.95, 3.3, uRevealHeight));
+        float revealBand = (1.0 - smoothstep(0.0, 0.28, distReveal)) * step(0.0, distReveal) * (1.0 - smoothstep(2.95, 3.3, uRevealHeight));
 
-        // Fine hairline silver-white seams in steady state, stronger construction seams during intro
-        float seamLum = fineSeam * (0.26 + uWireEdge * 0.62 + uSeamBoost * 0.34) + softBevel * vBrickGlow * 0.56;
-        float coreLeak = uInnerGlow * (innerFaceMask * 0.24 + fineSeam * 0.14);
+        // Fine hairline silver-white seams in steady state + traveling diagonal wave seam luminance
+        float seamLum = fineSeam * (0.2 + uWireEdge * 0.48 + uSeamBoost * 0.28 + vBrickGlow * 0.62) + softBevel * vBrickGlow * 0.42;
+        float coreLeak = (uInnerGlow + vBrickGlow * 0.45) * (innerFaceMask * 0.26 + fineSeam * 0.18);
 
-        totalEmissiveRadiance += vec3(0.86, 0.94, 1.0) * (seamLum + coreLeak + fresnel * (0.04 + vBrickGlow * 0.36));
+        totalEmissiveRadiance += vec3(0.94, 0.97, 0.98) * (seamLum + coreLeak + fresnel * (0.04 + vBrickGlow * 0.36));
         totalEmissiveRadiance += vec3(1.0) * revealBand * 1.15;`,
       );
   };

@@ -1,11 +1,13 @@
-import { selection } from '../particles/Sculpture';
+import { selection } from '../particles/social';
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { createSeededRandom, smoothstep } from '../utils/noise';
+import { createSeededRandom, fbm2D, smoothstep } from '../utils/noise';
 import { soundController } from '../hero/SoundController';
 import { getPortalAssemblyPose, getPortalProgress } from './PortalCameraPath';
 import { FrostGap } from './FrostGap';
+import { INNER_ARCS, PORTAL_LAYOUT } from './layout';
+import { PLATFORM_POSITION } from './stage';
 
 interface PortalSceneProps {
   scrollProgressRef: React.MutableRefObject<number>;
@@ -29,7 +31,10 @@ function createFrostTexture() {
   const data = new Uint8Array(size * size * 4);
   const random = createSeededRandom(307);
   for (let i = 0; i < size * size; i++) {
-    const value = Math.floor(125 + random() * 100);
+    const x = (i % size) / size, y = Math.floor(i / size) / size;
+    const frost = fbm2D(x * 8, y * 8, 4);
+    const grain = random() * 0.06;
+    const value = Math.floor(180 + frost * 48 + grain * 255);
     data.set([value, value, value, 255], i * 4);
   }
   const texture = new THREE.DataTexture(data, size, size);
@@ -42,7 +47,7 @@ function createFrostTexture() {
 function PortalSegments({ progressRef }: { progressRef: React.MutableRefObject<number> }) {
   const segments = useRef<(THREE.Group | null)[]>([]);
   const lights = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
-  const outer = useMemo(() => createArcGeometry(2.65, 3.25, Math.PI / 4 - 0.045, 0.62), []);
+  const outer = useMemo(() => createArcGeometry(PORTAL_LAYOUT.shellInner, PORTAL_LAYOUT.shellOuter, Math.PI / 4 - 0.045, 0.62), []);
   const seam = useMemo(() => createArcGeometry(2.65, 2.76, Math.PI / 4 - 0.075, 0.035), []);
   const panel = useMemo(() => createArcGeometry(2.84, 3.12, Math.PI / 4 - 0.14, 0.045, 0.018), []);
   const lip = useMemo(() => createArcGeometry(3.15, 3.23, Math.PI / 4 - 0.07, 0.07, 0.015), []);
@@ -66,9 +71,9 @@ function PortalSegments({ progressRef }: { progressRef: React.MutableRefObject<n
     // Assembly remains entirely scroll driven, including when reduced motion is enabled.
   });
   return <>{Array.from({ length: 8 }, (_, i) => <group key={i} ref={el => { segments.current[i] = el; }}>
-    <mesh geometry={outer} castShadow receiveShadow><meshStandardMaterial color={i % 3 === 0 ? '#a5b2be' : '#bfc8d2'} metalness={0.38} roughness={0.67} roughnessMap={frost} bumpMap={frost} bumpScale={0.065} /></mesh>
+    <mesh geometry={outer} castShadow receiveShadow><meshStandardMaterial color={i % 3 === 0 ? '#b4bfca' : '#ccd4dc'} metalness={0.14} roughness={0.8} roughnessMap={frost} bumpMap={frost} bumpScale={0.065} /></mesh>
     <mesh geometry={panel} position={[0, 0, 0.32]}>
-      <meshStandardMaterial color={i % 2 ? '#8293a5' : '#98a8b8'} metalness={0.52} roughness={0.56} bumpMap={frost} bumpScale={0.025} />
+      <meshStandardMaterial color={i % 2 ? '#a8b7c5' : '#bac7d2'} metalness={0.24} roughness={0.74} bumpMap={frost} bumpScale={0.025} />
     </mesh>
     <mesh geometry={lip} position={[0, 0, 0.35]}>
       <meshStandardMaterial color='#d1dce5' metalness={0.58} roughness={0.35} />
@@ -138,7 +143,7 @@ function PortalTunnel({ progressRef }: { progressRef: React.MutableRefObject<num
 function InnerArcGeometry({ progressRef, reducedMotion }: { progressRef: React.MutableRefObject<number>; reducedMotion: boolean }) {
   const group = useRef<THREE.Group>(null);
   const idle = useRef(0);
-  const arcs = useMemo(() => [createArcGeometry(1.82, 2.15, Math.PI * 1.34, 0.42), createArcGeometry(1.35, 1.57, Math.PI * 1.1, 0.32), createArcGeometry(2.3, 2.43, Math.PI * 0.65, 0.2)], []);
+  const arcs = useMemo(() => INNER_ARCS.map(arc => createArcGeometry(arc.inner, arc.outer, arc.angle, arc.depth, PORTAL_LAYOUT.arcBevel)), []);
   useEffect(() => () => arcs.forEach(arc => arc.dispose()), [arcs]);
   useFrame((_, delta) => {
     if (!group.current) return;
@@ -150,7 +155,7 @@ function InnerArcGeometry({ progressRef, reducedMotion }: { progressRef: React.M
     group.current.children.forEach((child, i) => { child.rotation.z = i * 1.9 + (1 - smoothstep(0.32, 0.65, p)) * (i % 2 ? -0.4 : 0.4) + (reducedMotion ? 0 : idle.current * (i % 2 ? -0.09 : 0.06)); });
   });
   return <group ref={group}>{arcs.map((geometry, i) => <mesh key={i} geometry={geometry} position={[0, 0, i * 0.24 - 0.1]} castShadow>
-    <meshStandardMaterial color={i === 1 ? '#8799aa' : '#c2cdd7'} metalness={0.52} roughness={0.48} />
+    <meshStandardMaterial color={i === 1 ? '#8799aa' : '#c2cdd7'} metalness={0.22} roughness={0.72} />
   </mesh>)}</group>;
 }
 
@@ -161,7 +166,7 @@ function PortalEnergy({ progressRef }: { progressRef: React.MutableRefObject<num
     const positions = new Float32Array(180 * 3);
     for (let i = 0; i < 180; i++) {
       const angle = random() * Math.PI * 2;
-      const radius = 0.35 + random() * 2.1;
+      const radius = 0.04 + random() * 2.1;
       positions.set([Math.cos(angle) * radius, Math.sin(angle) * radius, (random() - 0.5) * 1.5], i * 3);
     }
     const geometry = new THREE.BufferGeometry();
@@ -209,7 +214,7 @@ function CircularPlatform() {
       if (light) light.emissiveIntensity = THREE.MathUtils.damp(light.emissiveIntensity, index === selection.index ? 1.5 : 0.35, 3, delta);
     });
   });
-  return <group position={[0, -3, -48]}>
+  return <group position={PLATFORM_POSITION}>
     <mesh receiveShadow position={[0, -0.2, 0]}><cylinderGeometry args={[7.2, 7.1, 0.3, 128]} /><meshStandardMaterial color="#465363" roughness={0.9} /></mesh>
     {tracks.map((geometry, index) => <group key={index} ref={index === 0 ? disc : undefined}>
       <mesh geometry={geometry} receiveShadow castShadow>
@@ -255,7 +260,7 @@ export function PortalScene({ scrollProgressRef, reducedMotion }: PortalScenePro
       <InnerArcGeometry progressRef={progressRef} reducedMotion={reducedMotion} />
       <PortalEnergy progressRef={progressRef} />
       <FrostGap progressRef={progressRef} reducedMotion={reducedMotion} />
-      {Array.from({ length: size.width < 768 ? 4 : 8 }, (_, i) => <mesh key={i} position={[Math.cos(i * Math.PI / 4) * 2.42, Math.sin(i * Math.PI / 4) * 2.42, 0.35]} rotation={[0, 0, i * Math.PI / 4]}><boxGeometry args={[0.17, 0.28, 0.22]} /><meshStandardMaterial color="#aab9c7" roughness={0.5} metalness={0.4} /></mesh>)}
+      {Array.from({ length: size.width < 768 ? 4 : 8 }, (_, i) => <mesh key={i} position={[Math.cos(i * Math.PI / 4) * 2.96, Math.sin(i * Math.PI / 4) * 2.96, 0.35]} rotation={[0, 0, i * Math.PI / 4]}><boxGeometry args={[0.17, 0.28, 0.22]} /><meshStandardMaterial color="#aab9c7" roughness={0.5} metalness={0.4} /></mesh>)}
     </group>
     <CircularPlatform />
   </>;

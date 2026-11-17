@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { createSeededRandom, fbm2D } from '../utils/noise';
 import { createSnowParticleMaterial } from '../shaders/snowMaterial';
 import { introStage } from './heroStore';
+import { sampleWind } from './wind';
 
 interface AtmosphericFogProps {
   snowCount: number;
@@ -61,20 +62,37 @@ export function AtmosphericFog({ snowCount, reducedMotion }: AtmosphericFogProps
     const scales = new Float32Array(snowCount);
     const seeds = new Float32Array(snowCount);
     const speeds = new Float32Array(snowCount);
+    const layers = new Float32Array(snowCount);
 
     for (let i = 0; i < snowCount; i++) {
+      const rLayer = rand();
+      // 3 depth layers: 0 = Background (55%), 1 = Midground (35%), 2 = Foreground (10%)
+      const layer = rLayer < 0.55 ? 0 : rLayer < 0.9 ? 1 : 2;
+      layers[i] = layer;
+
       positions[i * 3] = (rand() * 2 - 1) * bounds[0];
       positions[i * 3 + 1] = (rand() * 2 - 1) * bounds[1];
-      positions[i * 3 + 2] = (rand() * 2 - 1) * bounds[2];
-      scales[i] = 0.4 + rand() * 0.9;
+      if (layer === 0) {
+        positions[i * 3 + 2] = -22 + rand() * 14;
+        scales[i] = 0.35 + rand() * 0.45;
+        speeds[i] = 0.32 + rand() * 0.48;
+      } else if (layer === 1) {
+        positions[i * 3 + 2] = -8 + rand() * 16;
+        scales[i] = 0.55 + rand() * 0.75;
+        speeds[i] = 0.52 + rand() * 0.78;
+      } else {
+        positions[i * 3 + 2] = 6 + rand() * 8;
+        scales[i] = 1.05 + rand() * 1.15;
+        speeds[i] = 0.72 + rand() * 0.92;
+      }
       seeds[i] = rand();
-      speeds[i] = 0.45 + rand() * 0.85;
     }
 
     geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geom.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
     geom.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
     geom.setAttribute('aSpeed', new THREE.BufferAttribute(speeds, 1));
+    geom.setAttribute('aLayer', new THREE.BufferAttribute(layers, 1));
 
     const mat = createSnowParticleMaterial();
     mat.uniforms.uBounds.value.set(bounds[0], bounds[1], bounds[2]);
@@ -90,7 +108,8 @@ export function AtmosphericFog({ snowCount, reducedMotion }: AtmosphericFogProps
   }, [mistTexture, snowGeom, snowMat]);
 
   useFrame((state) => {
-    const t = state.clock.elapsedTime;
+    const weather = sampleWind(state.clock.elapsedTime, reducedMotion);
+    const t = weather.time;
     const emerge = introStage.mountainEmerge;
 
     // Keep fog restrained once mountains emerge so rocky silhouettes up to 80m remain crisp
@@ -114,7 +133,8 @@ export function AtmosphericFog({ snowCount, reducedMotion }: AtmosphericFogProps
 
     snowMat.uniforms.uTime.value = t;
     snowMat.uniforms.uPixelRatio.value = gl.getPixelRatio();
-    snowMat.uniforms.uWindStrength.value = reducedMotion ? 0.15 : 0.48;
+    snowMat.uniforms.uWindStrength.value = weather.strength;
+    snowMat.uniforms.uWindOffset.value = weather.drift;
     snowMat.visible = emerge > 0.25;
   });
 

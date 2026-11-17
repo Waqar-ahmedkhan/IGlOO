@@ -19,6 +19,8 @@ export interface BrickAnnotation {
 
 export type HeroState = {
   assetsReady: boolean;
+  loadingStep: 0 | 1 | 2;
+  loadingFailed: boolean;
   introComplete: boolean;
   uiVisible: boolean;
   soundEnabled: boolean;
@@ -64,6 +66,8 @@ export const hudBridge = {
 
 const initialState: HeroState = {
   assetsReady: false,
+  loadingStep: 0,
+  loadingFailed: false,
   introComplete: false,
   uiVisible: false,
   soundEnabled: false,

@@ -10,6 +10,8 @@ export interface HeroExitSignals {
   brickSeparation: number; // Scalar drive for staggered upper-brick float + wobble
   smokeIntensity: number; // Smoky wind / dome vapor surge
   uiDissolve: number; // Manifesto / copyright / scroll hint dissolve & glitch (0 -> 1)
+  waveSweep: number; // Diagonal activation wave front (0 -> 1 from upper-left to lower-right)
+  opticalImpulse: number; // Localized lower-left foreground refraction impulse during State C pullback
 }
 
 const zeroSignals: HeroExitSignals = {
@@ -21,6 +23,8 @@ const zeroSignals: HeroExitSignals = {
   brickSeparation: 0,
   smokeIntensity: 0.35,
   uiDissolve: 0,
+  waveSweep: 0,
+  opticalImpulse: 0,
 };
 
 /**
@@ -46,6 +50,9 @@ export function computeHeroExitSignals(scrollProgress: number, reducedMotion: bo
   const internalGlowBoost = activation * 0.85 + zoomOut * 0.45;
   const smokeIntensity = 0.35 + activation * 0.45 + zoomOut * 0.2 + frostProgress * 0.25;
   const uiDissolve = smoothstep(0.24, 0.355, p);
+  const waveSweep = smoothstep(0.08, 0.29, p);
+  const pullbackBell = Math.sin(smoothstep(0.19, 0.31, p) * Math.PI);
+  const opticalImpulse = reducedMotion ? 0 : pullbackBell * (1 - frostProgress);
 
   return {
     activation,
@@ -56,5 +63,7 @@ export function computeHeroExitSignals(scrollProgress: number, reducedMotion: bo
     brickSeparation,
     smokeIntensity,
     uiDissolve,
+    waveSweep,
+    opticalImpulse,
   };
 }

@@ -18,6 +18,7 @@ export function IglooWireframe({ bricks, exitSignalsRef }: IglooWireframeProps) 
   const coreLightRef = useRef<THREE.PointLight>(null);
   const coreOrbRef = useRef<THREE.Sprite>(null);
   const entranceOrbRef = useRef<THREE.Sprite>(null);
+  const vestibuleRef = useRef<THREE.Mesh>(null);
 
   const { lineGeometry, pointGeometry } = useMemo(
     () => createIglooWireframeGeometry(bricks),
@@ -257,9 +258,14 @@ export function IglooWireframe({ bricks, exitSignalsRef }: IglooWireframeProps) 
     if (entranceOrbRef.current) {
       const constructSpill = 1.0 - Math.min(1, Math.max(0, (introStage.cameraDescend - 0.1) * 1.3));
       const spillWindow = Math.min(1, introStage.brickReveal * 1.35);
-      const es = 2.4 + glow * 0.9;
+      const waveDoorGlow = exitSignalsRef ? exitSignalsRef.current.activation * 0.45 : 0;
+      const es = 2.4 + glow * 0.9 + waveDoorGlow * 0.8;
       entranceOrbRef.current.scale.set(es, es, 1);
-      entranceOrbRef.current.material.opacity = glow * spillWindow * constructSpill * 0.38 * pulse;
+      entranceOrbRef.current.material.opacity =
+        (glow * spillWindow * constructSpill * 0.38 + waveDoorGlow * 0.36 + 0.08 * spillWindow) * pulse;
+    }
+    if (vestibuleRef.current) {
+      vestibuleRef.current.visible = introStage.brickReveal > 0.35;
     }
   });
 
@@ -267,6 +273,24 @@ export function IglooWireframe({ bricks, exitSignalsRef }: IglooWireframeProps) 
     <group>
       <lineSegments geometry={lineGeometry} material={lineMaterial} />
       <points geometry={pointGeometry} material={pointMaterial} />
+
+      {/* Deep recessed dark interior tunnel vestibule providing genuine architectural depth */}
+      <mesh
+        ref={vestibuleRef}
+        position={[0, 0.56, 1.92]}
+        rotation={[Math.PI * 0.5, 0, 0]}
+        visible={false}
+      >
+        <cylinderGeometry args={[0.78, 0.82, 1.15, 20, 1, false, -Math.PI * 0.52, Math.PI * 1.04]} />
+        <meshStandardMaterial
+          color="#090D14"
+          roughness={0.96}
+          metalness={0.02}
+          emissive="#D8EBFA"
+          emissiveIntensity={0.03}
+          side={THREE.BackSide}
+        />
+      </mesh>
 
       {/* Radiant white dome cap during wireframe phase (matches uploaded_media_0) */}
       <mesh position={[0, 0.04, 0]} material={coreCapMaterial}>

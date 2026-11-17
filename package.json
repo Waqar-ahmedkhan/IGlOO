@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "check:journey": "node scripts/check-camera.mjs"
+    "check:journey": "node scripts/check-camera.mjs",
+    "check:bricks": "node scripts/check-bricks.mjs",
+    "check:startup": "node scripts/check-startup.mjs"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",

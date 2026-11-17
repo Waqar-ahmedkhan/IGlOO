@@ -80,6 +80,8 @@ export function AtmosphericScene({
   const rimLightRef = useRef<THREE.DirectionalLight>(null);
   const reticleGroupRef = useRef<THREE.Group>(null);
   const dustGroupRef = useRef<THREE.Group>(null);
+  const entryMistRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const entryMistMaterials = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
   const mistMeshRefs = useRef<(THREE.Mesh | null)[]>([]);
   const mistMatRefs = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
 
@@ -309,13 +311,28 @@ export function AtmosphericScene({
 
     // Track lighting rig along camera Z so both crystals get crisp sculpted highlights
     if (keyLightRef.current) {
-      keyLightRef.current.position.set(-5.5, 6.8, camPos.current.z + 2.5);
+      keyLightRef.current.position.set(camPos.current.x - 5.5, camPos.current.y + 6.8, camPos.current.z + 2.5);
+      keyLightRef.current.target.position.set(camPos.current.x, camPos.current.y, camPos.current.z - 8);
+      keyLightRef.current.target.updateMatrixWorld();
       keyLightRef.current.intensity = THREE.MathUtils.lerp(1.45, 2.25, dBlend);
     }
     if (rimLightRef.current) {
-      rimLightRef.current.position.set(6.5, -1.5, camPos.current.z - 8.5);
+      rimLightRef.current.position.set(camPos.current.x + 6.5, camPos.current.y - 1.5, camPos.current.z - 8.5);
+      rimLightRef.current.target.position.set(camPos.current.x, camPos.current.y, camPos.current.z - 8);
+      rimLightRef.current.target.updateMatrixWorld();
       rimLightRef.current.intensity = THREE.MathUtils.lerp(0.95, 1.9, dBlend);
     }
+
+    const entryMist = smoothstep(0.31, 0.375, p) * (1 - smoothstep(0.41, 0.49, p));
+    entryMistRefs.current.forEach((mesh, index) => {
+      if (!mesh) return;
+      const drift = reducedMotion ? 0 : Math.sin(t * 0.09 + index * 2) * 0.35;
+      mesh.position.set(camPos.current.x + (index - 1) * 1.8 + drift, camPos.current.y + (index - 1) * 0.45, camPos.current.z - 2.5 - index * 1.6);
+      mesh.quaternion.copy(camera.quaternion);
+      mesh.visible = entryMist > 0.001;
+      const material = entryMistMaterials.current[index];
+      if (material) material.opacity = entryMist * (isMobile ? 0.12 : 0.18) * (1 - dBlend);
+    });
 
     // 3. Soft volumetric mist billboards & infinite-depth dust particles
     for (let i = 0; i < MIST_LAYERS.length; i++) {
@@ -336,10 +353,11 @@ export function AtmosphericScene({
     }
 
     if (dustGroupRef.current) {
-      dustGroupRef.current.position.set(0, 0, camPos.current.z - 6.0);
+      dustGroupRef.current.position.set(camPos.current.x, camPos.current.y, camPos.current.z - 6.0);
     }
     const atmoActive = THREE.MathUtils.clamp((p - 0.31) / 0.12, 0, 1);
-    dustMat.uniforms.uTime.value = t * 0.42;
+    dustMat.uniforms.uTime.value = reducedMotion ? 0 : t * 0.42;
+    dustMat.uniforms.uWindOffset.value = reducedMotion ? 0 : t * 0.42 * 0.45;
     dustMat.uniforms.uOpacity.value = 0.46 * atmoActive * (1 - dBlend * 0.25);
 
     if (reticleGroupRef.current) {
@@ -480,6 +498,12 @@ export function AtmosphericScene({
 
       {/* Drifting out-of-focus oversized technical typography across Z depth */}
       <BackgroundTelemetryField detailBlendRef={detailBlendRef} reducedMotion={reducedMotion} />
+
+      {[0, 1, 2].map(index => <mesh key={`entry-mist-${index}`} ref={mesh => { entryMistRefs.current[index] = mesh; }} scale={[9, 6, 1]}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial ref={material => { entryMistMaterials.current[index] = material; }}
+          map={mistTex} color='#d4dce5' transparent opacity={0} depthWrite={false} fog={false} />
+      </mesh>)}
 
       {/* Soft volumetric fog wisps drifting in space */}
       <group>

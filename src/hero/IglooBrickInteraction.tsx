@@ -71,24 +71,30 @@ export function IglooBrickInteraction({
   }, []);
 
   // Per-instance attributes & spring physics states (zero per-frame heap allocations)
-  const { glowArray, toneArray, springStates } = useMemo(() => {
+  const { glowArray, toneArray, springStates, lockStates } = useMemo(() => {
     const g = new Float32Array(bricks.length);
     const tn = new Float32Array(bricks.length);
+    const locks = new Uint8Array(bricks.length);
     const springs: SpringState[] = [];
     for (let i = 0; i < bricks.length; i++) {
       tn[i] = bricks[i].tone;
       springs.push({ value: 0, velocity: 0 });
     }
-    return { glowArray: g, toneArray: tn, springStates: springs };
+    return { glowArray: g, toneArray: tn, springStates: springs, lockStates: locks };
   }, [bricks]);
 
   const lagFollowRef = useRef(new THREE.Vector3(999, 999, 999));
   const wasHoveredRef = useRef(false);
+  const previousPointer = useRef(new THREE.Vector2());
+  const pointerMotion = useRef(0);
+  const clickWaveRef = useRef({ active: false, strength: 0, radius: 0, point: new THREE.Vector3() });
 
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const tmpMatrix = useMemo(() => new THREE.Matrix4(), []);
   const tmpPos = useMemo(() => new THREE.Vector3(), []);
   const tmpWorldPos = useMemo(() => new THREE.Vector3(), []);
+  const tmpWorldNormal = useMemo(() => new THREE.Vector3(), []);
+  const tmpToCam = useMemo(() => new THREE.Vector3(), []);
   const tmpQuat = useMemo(() => new THREE.Quaternion(), []);
   const tmpWobbleQuat = useMemo(() => new THREE.Quaternion(), []);
   const tmpEuler = useMemo(() => new THREE.Euler(), []);
@@ -108,6 +114,47 @@ export function IglooBrickInteraction({
     };
   }, [brickGeom, glowArray, toneArray, brickMaterial, shadowTexture]);
 
+  useEffect(() => {
+    let downX = 0;
+    let downY = 0;
+    const ndc = new THREE.Vector2();
+
+    const onDown = (e: PointerEvent) => {
+      downX = e.clientX;
+      downY = e.clientY;
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (scrollProgressRef.current >= 0.38) return;
+      if (!heroStore.getState().introComplete && introStage.brickReveal < 0.96) return;
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('button, a, nav')) return;
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) > 14) return;
+      const proxy = proxyRef.current;
+      if (!proxy) return;
+
+      const w = Math.max(1, window.innerWidth);
+      const h = Math.max(1, window.innerHeight);
+      ndc.set((e.clientX / w) * 2 - 1, -(e.clientY / h) * 2 + 1);
+      raycaster.setFromCamera(ndc, camera);
+      const hits = raycaster.intersectObject(proxy, false);
+      if (hits.length > 0) {
+        clickWaveRef.current.point.copy(hits[0].point);
+        clickWaveRef.current.active = true;
+        clickWaveRef.current.radius = 0;
+        clickWaveRef.current.strength = Math.min(1.6, clickWaveRef.current.strength + 1.0);
+        soundController.playParticleClickBurst(0.75);
+      }
+    };
+
+    window.addEventListener('pointerdown', onDown, { passive: true });
+    window.addEventListener('pointerup', onUp, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [camera, raycaster, scrollProgressRef]);
+
   useFrame((state, delta) => {
     const mesh = meshRef.current;
     const group = groupRef.current;
@@ -120,6 +167,9 @@ export function IglooBrickInteraction({
     const introReady = heroStore.getState().introComplete || brickReveal > 0.96;
     const heroScroll = scrollProgressRef.current;
     const exit = exitSignalsRef.current;
+    const pointerSpeed = pointerNdcRef.current.distanceTo(previousPointer.current) / Math.max(dt, 0.001);
+    previousPointer.current.copy(pointerNdcRef.current);
+    pointerMotion.current = damp(pointerMotion.current, Math.min(1, pointerSpeed * 0.8), 6, dt);
 
     // Bottom-to-top reveal shader height (-0.25 -> 3.35)
     brickUniforms.uTime.value = t;
@@ -167,9 +217,25 @@ export function IglooBrickInteraction({
     activeList.length = 0;
     let maxDisp = 0;
 
+    // Periodic diagonal living wave at rest + scroll-driven diagonal structural wave (upper-left -> lower-right)
+    const idleCycle = (t * 0.22) % 2.4;
+    const idleWaveFront = idleCycle < 1.35 ? idleCycle / 1.35 : -1;
+    const scrollWaveFront = exit.waveSweep;
+
+    const clickWave = clickWaveRef.current;
+    if (clickWave.active) {
+      clickWave.radius += dt * 7.2;
+      clickWave.strength = damp(clickWave.strength, 0, 2.2, dt);
+      if (clickWave.strength < 0.01) {
+        clickWave.active = false;
+        clickWave.strength = 0;
+      }
+    }
+
     for (let i = 0; i < bricks.length; i++) {
       const brick = bricks[i];
       const rowNorm = brick.row / Math.max(1, brick.maxRow);
+      const waveCoord = brick.wavePos;
 
       tmpWorldPos.copy(brick.basePos).applyMatrix4(group.matrixWorld);
 
@@ -181,36 +247,84 @@ export function IglooBrickInteraction({
           const nearCore = 1 - smoothstep(0.0, 1.0, dist);
           const outerTail = 1 - smoothstep(1.0, 3.0, dist);
           const combined = Math.min(1, nearCore * 0.42 + outerTail * 0.68);
-          cursorPush = combined * (reducedMotion ? 0.25 : 0.84);
+          cursorPush = combined * (reducedMotion ? 0.1 : 0.68) * (0.06 + pointerMotion.current * 0.94);
         }
       }
 
-      // Subtle automatic living movement on upper bricks even without cursor interaction
-      const idleWave =
-        !reducedMotion && brick.isInteractive && introReady
-          ? Math.max(
-              0,
-              Math.sin(t * 1.15 + brick.basePos.x * 0.72 + brick.seed * 4.5) * 0.045 * rowNorm,
-            )
-          : 0;
+      // Click shockwave impulse radiating outward across igloo blocks
+      let clickPush = 0;
+      let clickGlow = 0;
+      if (clickWave.active && brick.isInteractive && !reducedMotion) {
+        const cDist = tmpWorldPos.distanceTo(clickWave.point);
+        const ringDelta = Math.abs(cDist - clickWave.radius);
+        const ringEnv = Math.exp(-(ringDelta * ringDelta) * 1.45);
+        const nearEnv = Math.exp(-cDist * 0.72) * 0.55;
+        clickPush = (ringEnv * 0.48 + nearEnv) * clickWave.strength * (0.65 + 0.35 * rowNorm);
+        clickGlow = (ringEnv + nearEnv) * clickWave.strength * 0.95;
+      }
 
-      // Scroll-driven State B & C activation scatter: upper bricks separate at individualized staggered heights
+      // Diagonal wave envelope at rest (upper-left to lower-right algorithmic architectural pulse)
+      let idleWave = 0;
+      let seamPreGlow = clickGlow;
+      if (!reducedMotion && brick.isInteractive && introReady && idleWaveFront >= 0) {
+        const dWave = idleWaveFront - waveCoord * 0.82;
+        if (dWave > -0.14 && dWave < 0.36) {
+          seamPreGlow = Math.max(seamPreGlow, smoothstep(-0.14, 0.04, dWave) * (1 - smoothstep(0.18, 0.36, dWave)) * 0.55);
+        }
+        if (dWave > 0 && dWave < 0.34) {
+          const env = Math.sin((dWave / 0.34) * Math.PI);
+          idleWave = env * (0.042 + 0.048 * rowNorm) * brick.scale.x;
+        }
+      }
+
+      // Scroll-driven State B & C diagonal wave activation: staggered by waveCoord (normX * 0.55 + (1 - normY) * 0.45)
       const sepStrength = exit.brickSeparation;
+      const waveActivation = smoothstep(waveCoord * 0.52, waveCoord * 0.52 + 0.42, scrollWaveFront);
+      const waveCrestGlow =
+        scrollWaveFront > 0.01
+          ? smoothstep(waveCoord * 0.52 - 0.12, waveCoord * 0.52 + 0.08, scrollWaveFront) *
+            (1 - smoothstep(waveCoord * 0.52 + 0.25, waveCoord * 0.52 + 0.55, scrollWaveFront))
+          : 0;
+      seamPreGlow = Math.max(seamPreGlow, waveCrestGlow * 0.95);
+
       const scrollSep =
         brick.isInteractive && sepStrength > 0.005
-          ? sepStrength * (0.24 + rowNorm * 0.92 * (0.55 + brick.seed * 0.85))
+          ? sepStrength *
+            (0.25 + 0.75 * waveActivation) *
+            (0.22 + rowNorm * 0.88 * (0.52 + brick.seed * 0.78))
           : 0;
 
-      const targetDisp = Math.max(0, cursorPush + idleWave + scrollSep);
+      const targetDisp = Math.max(0, cursorPush + clickPush + idleWave + scrollSep);
 
-      // Spring-like damping for organic float & gentle return to resting position
-      const stiffness = targetDisp > springStates[i].value ? 52 : 28;
-      const dampingRatio = targetDisp > springStates[i].value ? 10.5 : 8.2;
-      const disp = Math.max(0, stepSpring(springStates[i], targetDisp, stiffness, dampingRatio, dt));
+      // Smooth outward acceleration + slightly faster controlled deceleration for mechanical lock
+      const expanding = targetDisp > springStates[i].value;
+      const stiffness = expanding ? 48 : 58;
+      const dampingRatio = expanding ? 9.8 : 11.2;
+      let disp = Math.max(0, stepSpring(springStates[i], targetDisp, stiffness, dampingRatio, dt));
+      if (targetDisp < 0.002 && disp < 0.0025) {
+        disp = 0;
+        springStates[i].value = 0;
+        springStates[i].velocity = 0;
+      }
+
+      // Synchronized mechanical escapement ticks (activation) & tactile stone/ice locking clicks (settle)
+      if (introReady && brick.isInteractive) {
+        if (lockStates[i] === 0 && disp > 0.12 && expanding) {
+          lockStates[i] = 1;
+          soundController.playWaveTick(waveCoord, Math.min(1, disp * 1.6));
+        } else if (lockStates[i] === 1 && disp < 0.022 && !expanding) {
+          lockStates[i] = 0;
+          soundController.playBrickLockClick(brick.tone, 0.65);
+        }
+      }
 
       if (disp > maxDisp) maxDisp = disp;
-      const showExitLabel = sepStrength > 0.14 && exit.frostProgress < 0.16 && disp > 0.24 && (brick.id % 5 === 0);
-      if (brick.isInteractive && ((hasHit && cursorPush > 0.18) || showExitLabel)) {
+      const showExitLabel =
+        (sepStrength > 0.1 || idleWave > 0.028) &&
+        exit.frostProgress < 0.16 &&
+        disp > 0.045 &&
+        brick.id % 3 === 0;
+      if (brick.isInteractive && ((hasHit && cursorPush > 0.14) || showExitLabel)) {
         activeList.push({ idx: i, disp });
       }
 
@@ -219,13 +333,16 @@ export function IglooBrickInteraction({
         tmpPos.y += scrollSep * (0.25 + brick.seed * 0.42);
       }
 
+      // Controlled 1-5 deg architectural tilt during wave/separation (no chaotic drift)
       tmpQuat.copy(brick.baseQuat);
-      if (disp > 0.018 && !reducedMotion && brick.isInteractive) {
-        const wobble = Math.min(0.28, disp * 0.22);
+      if (disp > 0.008 && !reducedMotion && brick.isInteractive) {
+        const maxTiltRad = Math.min(0.087, disp * 0.14); // 0.087 rad = ~5 degrees
+        const signA = brick.id % 2 === 0 ? 1 : -1;
+        const signB = brick.id % 3 === 0 ? -1 : 1;
         tmpEuler.set(
-          Math.sin(t * 2.1 + brick.seed * 12.0) * wobble,
-          Math.cos(t * 1.7 + brick.seed * 9.0) * wobble,
-          Math.sin(t * 1.5 + brick.seed * 7.0) * wobble * 0.7,
+          signA * maxTiltRad * (0.7 + 0.3 * Math.sin(t * 1.6 + brick.seed * 8.0)),
+          signB * maxTiltRad * 0.55 * Math.cos(t * 1.3 + brick.seed * 6.0),
+          signA * signB * maxTiltRad * 0.45,
         );
         tmpWobbleQuat.setFromEuler(tmpEuler);
         tmpQuat.multiply(tmpWobbleQuat);
@@ -236,7 +353,7 @@ export function IglooBrickInteraction({
       tmpMatrix.compose(tmpPos, tmpQuat, tmpScale);
       mesh.setMatrixAt(i, tmpMatrix);
 
-      glowArray[i] = Math.min(1.8, disp * 1.45 + exit.internalGlowBoost * 0.25);
+      glowArray[i] = Math.min(1.85, seamPreGlow * 0.85 + disp * 1.48 + exit.internalGlowBoost * 0.28);
     }
 
     mesh.instanceMatrix.needsUpdate = true;
@@ -247,22 +364,26 @@ export function IglooBrickInteraction({
       soundController.playBrickHoverChime(Math.min(1, maxDisp));
     }
 
-    // Project crisp crosshair + connected line telemetry on displaced upper bricks (matches uploaded_media_1_1794801840670)
+    // Project crisp crosshair + connected line telemetry on camera-facing displaced bricks with stable codes
     if (activeList.length > 0) {
       camera.updateMatrixWorld();
       camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
 
       activeList.sort((a, b) => b.disp - a.disp);
-      const topN = activeList.slice(0, 5);
       const out: BrickAnnotation[] = [];
 
-      for (let k = 0; k < topN.length; k++) {
-        const b = bricks[topN[k].idx];
-        const disp = topN[k].disp;
+      for (let k = 0; k < activeList.length && out.length < 5; k++) {
+        const b = bricks[activeList[k].idx];
+        const disp = activeList[k].disp;
         tmpWorldPos
           .copy(b.basePos)
           .addScaledVector(b.outwardDir, disp + 0.25)
           .applyMatrix4(group.matrixWorld);
+
+        // Normal dot-product occlusion check: skip back-facing or silhouette-occluded blocks
+        tmpWorldNormal.copy(b.outwardDir).transformDirection(group.matrixWorld).normalize();
+        tmpToCam.subVectors(camera.position, tmpWorldPos).normalize();
+        if (tmpWorldNormal.dot(tmpToCam) < 0.22) continue;
 
         tmpProj.copy(tmpWorldPos).project(camera);
         if (tmpProj.z > -1 && tmpProj.z < 1) {
@@ -271,7 +392,7 @@ export function IglooBrickInteraction({
 
           out.push({
             id: b.id,
-            code: String(Math.min(99, Math.max(11, Math.round(12 + disp * 48 + (b.id % 19))))),
+            code: b.code,
             anchorX,
             anchorY,
             tipX: anchorX,
@@ -280,8 +401,8 @@ export function IglooBrickInteraction({
           });
         }
       }
-      // Sort clockwise around dome angle so connecting polyline forms a clean technical circuit
-      out.sort((a, b) => a.anchorY - b.anchorY || a.anchorX - b.anchorX);
+      // Sort by stable brick ID / screen angle so connecting polyline remains steady without frame-to-frame jumping
+      out.sort((a, b) => a.anchorX - b.anchorX || a.anchorY - b.anchorY);
       hudBridge.brickAnnotations = out;
       hudBridge.emit();
     } else if (hudBridge.brickAnnotations.length > 0) {

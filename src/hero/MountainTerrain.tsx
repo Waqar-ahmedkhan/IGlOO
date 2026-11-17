@@ -245,7 +245,7 @@ function createMountainRockShaderMaterial(snowAmount: number): {
         float snowThreshold = 0.68 - uSnowAmount * 0.32 - vGully * 0.08;
         float snowMask = smoothstep(snowThreshold - 0.12, snowThreshold + 0.14, slope + (detail - 0.5) * 0.18) * (0.55 + 0.45 * elevMask);
 
-        vec3 snowPatch = mix(vec3(0.38, 0.41, 0.47), vec3(0.56, 0.60, 0.67), smoothstep(0.45, 0.94, slope));
+        vec3 snowPatch = mix(vec3(0.30, 0.34, 0.40), vec3(0.46, 0.50, 0.57), smoothstep(0.45, 0.94, slope));
         vec3 mtnCol = mix(baseSlope, snowPatch, clamp(snowMask, 0.0, 0.92));
 
         // Blend smoothly out of sky mist hue during emergence
