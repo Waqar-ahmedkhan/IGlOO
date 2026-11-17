@@ -48,10 +48,11 @@ export function SocialSelector() {
     };
   }, [visible]);
   if (!visible) return null;
+  const order = [(active + 2) % 3, active, (active + 1) % 3];
   return <>
     <nav className="social-selector" aria-label="Social sculpture">
       <button className="sculpture-arrow previous" aria-label="Previous sculpture" onClick={() => choose(active - 1, -1)}><svg viewBox="0 0 64 20" aria-hidden="true"><path d="M63 14H2L13 3" /></svg></button>
-      {[2, 0, 1].map(index => (
+      {order.map(index => (
         <button
           key={names[index]}
           aria-pressed={active === index}

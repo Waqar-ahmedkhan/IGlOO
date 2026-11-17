@@ -7,6 +7,7 @@ import {
   usePortfolioSelector,
 } from '../portfolio/portfolioStore';
 import { useHeroSelector } from '../hero/heroStore';
+import { useScrollStateSelector } from '../experience/ScrollDirector';
 
 /**
  * 60fps imperative SVG leader lines + scrambled monospaced annotations
@@ -19,6 +20,7 @@ export function PortfolioHUD() {
   const activeHudNonce = usePortfolioSelector((s) => s.activeHudNonce);
   const selectedProjectId = usePortfolioSelector((s) => s.selectedProjectId);
   const hoveredProjectId = usePortfolioSelector((s) => s.hoveredProjectId);
+  const inParticleStage = useScrollStateSelector((s) => s.stateName === 'particle-stage');
 
   const activeProject = getProjectById(activeHudProjectId);
 
@@ -84,7 +86,11 @@ export function PortfolioHUD() {
   }, []);
 
   const gridOpacity =
-    heroScroll > 0.72 ? (selectedProjectId ? 0.16 : Math.min(1, (heroScroll - 0.72) / 0.25)) : 0;
+    heroScroll > 0.72
+      ? selectedProjectId || inParticleStage
+        ? 0.14
+        : Math.min(1, (heroScroll - 0.72) / 0.25)
+      : 0;
 
   return (
     <>

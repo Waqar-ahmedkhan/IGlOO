@@ -221,8 +221,8 @@ function CircularPlatform() {
         <meshStandardMaterial color={index === 0 ? '#8995a3' : '#748191'} metalness={0.32} roughness={0.74} bumpMap={frost} bumpScale={0.045} roughnessMap={frost} />
       </mesh>
       {index > 0 && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, [0, 0.23, 0.14, 0.06, -0.02][index], 0]}>
-        <ringGeometry args={[[0, 2.38, 3.44, 4.65, 6][index] - 0.065, [0, 2.38, 3.44, 4.65, 6][index] + 0.015, 160]} />
-        <meshStandardMaterial ref={el => { lights.current[index - 1] = el; }} color="#d6e7f2" emissive="#c5e5ff" emissiveIntensity={0.5} roughness={0.4} />
+        <ringGeometry args={[[0, 2.38, 3.44, 4.65, 6][index] - 0.065, [0, 2.38, 3.44, 4.65, 6][index] + 0.025, 160]} />
+        <meshStandardMaterial ref={el => { lights.current[index - 1] = el; }} color="#e5f2fb" emissive="#d8eeff" emissiveIntensity={index === 1 ? 1.8 : 0.75} roughness={0.35} />
       </mesh>}
       {index === 0 && Array.from({ length: 12 }, (_, i) => <mesh key={i} position={[Math.sin(i * Math.PI / 6) * 1.85, 0.461, Math.cos(i * Math.PI / 6) * 1.85]} rotation={[-Math.PI / 2, 0, -i * Math.PI / 6]}>
         <planeGeometry args={[0.008, 0.62]} /><meshBasicMaterial color="#445565" />
@@ -230,6 +230,15 @@ function CircularPlatform() {
     </group>)}
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.465, 0]}>
       <ringGeometry args={[1.4, 1.412, 128]} /><meshStandardMaterial color="#576879" roughness={0.8} />
+    </mesh>
+    {/* Overhead luminous portal crown ring framing the sculpture top */}
+    <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 5.25, 0]}>
+      <torusGeometry args={[2.75, 0.12, 16, 120]} />
+      <meshStandardMaterial color="#eef7ff" emissive="#e3f3ff" emissiveIntensity={1.65} roughness={0.35} />
+    </mesh>
+    <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 5.38, 0]}>
+      <ringGeometry args={[2.55, 3.15, 120]} />
+      <meshBasicMaterial color="#eaf5ff" transparent opacity={0.28} side={THREE.DoubleSide} depthWrite={false} />
     </mesh>
   </group>;
 }

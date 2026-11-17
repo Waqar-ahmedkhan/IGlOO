@@ -30,9 +30,8 @@ function sampleThickSegment(
   const nx = -dy / len;
   const ny = dx / len;
 
-  // Bias points toward outer faces/bevels while keeping solid core thickness
-  const across = (random() * 2 - 1);
-  const edgeBias = Math.sign(across) * Math.pow(Math.abs(across), 0.72) * halfWidth;
+  const across = random() * 2 - 1;
+  const edgeBias = Math.sign(across) * Math.pow(Math.abs(across), 0.76) * halfWidth;
   const depthBias = (random() * 2 - 1) * halfDepth;
 
   let x = cx + nx * edgeBias;
@@ -40,11 +39,11 @@ function sampleThickSegment(
   let z = depthBias;
 
   if (haloFactor > 0) {
-    const spread = (0.14 + random() * 0.42) * haloFactor;
+    const spread = (0.08 + random() * 0.28) * haloFactor;
     const ang = random() * Math.PI * 2;
     x += Math.cos(ang) * spread;
-    y += Math.sin(ang) * spread * 1.15;
-    z += (random() - 0.5) * spread * 1.6;
+    y += Math.sin(ang) * spread * 1.1;
+    z += (random() - 0.5) * spread * 1.3;
   }
 
   return [x, y, z];
@@ -53,78 +52,89 @@ function sampleThickSegment(
 function targets(count: number) {
   const random = createSeededRandom(429);
   const parts = [
-    [0, -0.3, 0, 0.66, 0.87, 0.49], [0, 0.72, 0, 0.60, 0.56, 0.50],
-    [-0.67, -0.2, 0, 0.16, 0.57, 0.23], [0.67, -0.2, 0, 0.16, 0.57, 0.23],
-    [-0.28, -1.13, 0.12, 0.24, 0.12, 0.34], [0.28, -1.13, 0.12, 0.24, 0.12, 0.34],
-    [0, 0.62, 0.48, 0.19, 0.12, 0.25],
-    [-0.55, 0.73, 0, 0.14, 0.28, 0.27], [0.55, 0.73, 0, 0.14, 0.28, 0.27],
+    [0, -0.34, 0, 0.64, 0.85, 0.48], // 0: plump body
+    [0, 0.68, 0, 0.56, 0.52, 0.48],  // 1: head
+    [-0.68, -0.22, 0, 0.16, 0.50, 0.22], // 2: left flipper
+    [0.68, -0.22, 0, 0.16, 0.50, 0.22],  // 3: right flipper
+    [-0.28, -1.14, 0.12, 0.24, 0.12, 0.34], // 4: left foot
+    [0.28, -1.14, 0.12, 0.24, 0.12, 0.34],  // 5: right foot
+    [0, 0.60, 0.46, 0.17, 0.11, 0.22],      // 6: beak
+    [-0.58, 0.70, 0, 0.16, 0.28, 0.28],     // 7: left headphone earcup
+    [0.58, 0.70, 0, 0.16, 0.28, 0.28],      // 8: right headphone earcup
   ];
   return [0, 1, 2].map(shape => {
     const points = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       let x = 0, y = 0, z = 0;
-      const isHalo = (i % 100) >= 87;
+      const isHalo = (i % 100) >= 91;
 
       if (shape === 0) {
         const part = i % 100;
-        // Headphone arch and ear cups make the mascot readable in silhouette.
-        if (part >= 76 && part < 82) {
+        // Distinct arched headphone headband above crown + chunky earcups + flippers
+        if (part >= 76 && part < 83) {
           const angle = random() * Math.PI;
           const tube = random() * Math.PI * 2;
-          x = Math.cos(angle) * (0.59 + Math.cos(tube) * 0.055);
-          y = 0.72 + Math.sin(angle) * (0.64 + Math.cos(tube) * 0.055);
-          z = Math.sin(tube) * 0.075;
+          x = Math.cos(angle) * (0.60 + Math.cos(tube) * 0.052);
+          y = 0.70 + Math.sin(angle) * (0.68 + Math.cos(tube) * 0.052);
+          z = Math.sin(tube) * 0.072;
         } else {
-          const spec = parts[part < 48 ? 0 : part < 76 ? 1 : part < 85 ? 7 : part < 88 ? 8 : part < 90 ? 2 : part < 92 ? 3 : part < 95 ? 4 : part < 98 ? 5 : 6];
+          const spec = parts[part < 46 ? 0 : part < 74 ? 1 : part < 86 ? 7 : part < 89 ? 8 : part < 91 ? 2 : part < 93 ? 3 : part < 96 ? 4 : part < 98 ? 5 : 6];
           const a = random() * Math.PI * 2;
           const b = Math.acos(random() * 2 - 1);
-          // Surface-biased shell + solid interior + outer orbiting halo particles
-          const r = isHalo ? 1.04 + random() * 0.32 : 0.45 + 0.55 * Math.pow(random(), 0.26);
+          const r = isHalo ? 1.03 + random() * 0.24 : 0.35 + 0.65 * Math.pow(random(), 0.22);
           x = spec[0] + Math.sin(b) * Math.cos(a) * r * spec[3];
           y = spec[1] + Math.cos(b) * r * spec[4];
           z = spec[2] + Math.sin(b) * Math.sin(a) * r * spec[5];
         }
       } else if (shape === 1) {
-        // Bold 3D extruded architectural X (X / Twitter)
-        const arm = i % 2 === 0 ? 1 : -1;
-        const [sx, sy, sz] = sampleThickSegment(
-          random,
-          -0.66,
-          -0.94 * arm,
-          0.66,
-          0.94 * arm,
-          0.165,
-          0.24,
-          isHalo ? 1 : 0,
-        );
-        x = sx;
-        y = sy;
-        z = sz;
-      } else {
-        // Bold 3D extruded architectural M (Medium) matching reference screenshot
-        const seg = i % 4;
+        // Iconic Twitter/X: solid '/' bar crossed by hollow double-walled '\' ribbon + flat serif caps
+        const bucket = i % 20;
         const halo = isHalo ? 1 : 0;
-        const coords: [number, number, number, number, number] =
-          seg === 0
-            ? [-0.58, -0.94, -0.58, 0.92, 0.16]
-            : seg === 1
-            ? [0.58, -0.94, 0.58, 0.92, 0.16]
-            : seg === 2
-            ? [-0.56, 0.88, 0.0, -0.22, 0.14]
-            : [0.0, -0.22, 0.56, 0.88, 0.14];
-        const [sx, sy, sz] = sampleThickSegment(
-          random,
-          coords[0],
-          coords[1],
-          coords[2],
-          coords[3],
-          coords[4],
-          0.25,
-          halo,
-        );
-        x = sx;
-        y = sy;
-        z = sz;
+        if (bucket < 8) {
+          // Solid diagonal '/' bar
+          [x, y, z] = sampleThickSegment(random, -0.68, -0.94, 0.68, 0.94, 0.09, 0.16, halo);
+        } else if (bucket < 13) {
+          // Upper-right parallel wall of '\' hollow bar
+          [x, y, z] = sampleThickSegment(random, -0.58, 0.94, 0.76, -0.94, 0.05, 0.16, halo);
+        } else if (bucket < 18) {
+          // Lower-left parallel wall of '\' hollow bar
+          [x, y, z] = sampleThickSegment(random, -0.78, 0.94, 0.56, -0.94, 0.05, 0.16, halo);
+        } else if (bucket === 18) {
+          // Top-left cap
+          [x, y, z] = sampleThickSegment(random, -0.82, 0.94, -0.54, 0.94, 0.045, 0.16, 0);
+        } else {
+          // Bottom-right cap
+          [x, y, z] = sampleThickSegment(random, 0.52, -0.94, 0.80, -0.94, 0.045, 0.16, 0);
+        }
+      } else {
+        // Bold architectural editorial serif M (Medium) with top & bottom serifs + sharp center V
+        const bucket = i % 24;
+        const halo = isHalo ? 1 : 0;
+        if (bucket < 5) {
+          // Left pillar
+          [x, y, z] = sampleThickSegment(random, -0.58, -0.92, -0.58, 0.88, 0.115, 0.21, halo);
+        } else if (bucket < 10) {
+          // Right pillar
+          [x, y, z] = sampleThickSegment(random, 0.58, -0.92, 0.58, 0.88, 0.115, 0.21, halo);
+        } else if (bucket < 15) {
+          // Left diagonal stem into sharp center V
+          [x, y, z] = sampleThickSegment(random, -0.54, 0.86, 0.0, -0.46, 0.115, 0.21, halo);
+        } else if (bucket < 20) {
+          // Right diagonal stem out of sharp center V
+          [x, y, z] = sampleThickSegment(random, 0.0, -0.46, 0.54, 0.86, 0.115, 0.21, halo);
+        } else if (bucket === 20) {
+          // Left top serif
+          [x, y, z] = sampleThickSegment(random, -0.78, 0.88, -0.42, 0.88, 0.06, 0.20, 0);
+        } else if (bucket === 21) {
+          // Left bottom serif
+          [x, y, z] = sampleThickSegment(random, -0.78, -0.92, -0.38, -0.92, 0.06, 0.20, 0);
+        } else if (bucket === 22) {
+          // Right top serif
+          [x, y, z] = sampleThickSegment(random, 0.42, 0.88, 0.78, 0.88, 0.06, 0.20, 0);
+        } else {
+          // Right bottom serif
+          [x, y, z] = sampleThickSegment(random, 0.38, -0.92, 0.78, -0.92, 0.06, 0.20, 0);
+        }
       }
 
       points[i * 3] = x;
@@ -158,14 +168,31 @@ export function ParticleSculpture({ reducedMotion }: { reducedMotion: boolean })
 function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
   const { size, pointer, camera, gl } = useThree();
   const cores = typeof navigator === 'undefined' ? 4 : navigator.hardwareConcurrency || 4;
-  // Balanced density so bigger chunky 3D ice granules stay sharp, dynamic, and 60fps
-  const count = size.width < 768 ? 42000 : size.width < 1440 || cores < 8 ? 95000 : 150000;
+  // Dense crisp granular ice dust for sharp silhouettes + larger faceted edge shards
+  const count = size.width < 768 ? 55000 : size.width < 1440 || cores < 8 ? 140000 : 210000;
 
   const containment = useMemo(() => {
-    const cyl = new THREE.CylinderGeometry(2.12, 2.24, 6.4, 24, 9, true);
+    const cyl = new THREE.CylinderGeometry(2.08, 2.22, 6.4, 28, 12, true);
     const wire = new THREE.WireframeGeometry(cyl);
-    const points = cyl;
-    return { wire, points };
+    const wireMat = new THREE.ShaderMaterial({
+      vertexShader: `
+        varying float vY;
+        void main() {
+          vY = position.y;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying float vY;
+        void main() {
+          float fade = smoothstep(-3.1, -0.8, vY) * (1.0 - smoothstep(0.8, 3.1, vY));
+          gl_FragColor = vec4(0.85, 0.92, 0.98, fade * 0.042);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+    });
+    return { wire, points: cyl, wireMat };
   }, []);
 
   const system = useMemo(() => {
@@ -296,13 +323,13 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
           #endif
           gl_Position = projectionMatrix * mv;
 
-          // Much larger, hierarchical chunky dots (small core + bold medium + big hero ice chunks)
-          float sizeBoost = 0.46 + vChunk * 2.35 + outerSeed * 0.35 + clickGlow * 0.55 + influence * 0.4;
-          gl_PointSize = clamp(pointScale * sizeBoost / max(0.5, -mv.z), 2.2 * pixelRatio, 26.0 * pixelRatio);
+          // Dense crisp core granules (2-5px) + chunky faceted outer ice shards (6-13.5px)
+          float sizeBoost = 0.48 + vChunk * 1.45 + outerSeed * 0.38 + clickGlow * 0.65 + influence * 0.35;
+          gl_PointSize = clamp(pointScale * sizeBoost / max(0.5, -mv.z), 1.6 * pixelRatio, 13.5 * pixelRatio);
 
           vec3 surfaceNormal = normalize(vec3(p.x / 0.66, (p.y > 0.35 ? (p.y - 0.72) / 0.56 : (p.y + 0.3) / 0.87), p.z / 0.5) + vec3(0.001));
-          float formLight = 0.48 + max(0.0, dot(surfaceNormal, normalize(vec3(-0.55, 0.75, 0.55)))) * 0.62;
-          brightness = (0.42 + seed * 0.14 + p.y * 0.08 + sheen * 0.32) * formLight + pulse * 0.25 + influence * 0.38 + clickGlow * 0.52;
+          float formLight = 0.28 + max(0.0, dot(surfaceNormal, normalize(vec3(-0.6, 0.78, 0.48)))) * 0.78;
+          brightness = (0.34 + seed * 0.16 + p.y * 0.08 + sheen * 0.36) * formLight + pulse * 0.24 + influence * 0.42 + clickGlow * 0.55;
         }
       `,
       fragmentShader: `
@@ -313,22 +340,24 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
         #include <fog_pars_fragment>
         void main() {
           vec2 uv = gl_PointCoord * 2.0 - 1.0;
-          // Slightly faceted octagonal silhouette on larger chunks, smooth round sphere on finer granules
+          // Faceted crystalline ice shards on larger chunks, rounded granules on core particles
           float roundR = dot(uv, uv);
-          float facetR = max(abs(uv.x), abs(uv.y)) * 0.85 + (abs(uv.x) + abs(uv.y)) * 0.22;
-          float shapeR = mix(roundR, facetR * facetR, smoothstep(0.58, 0.96, vChunk) * 0.42);
+          float facetR = max(abs(uv.x), abs(uv.y)) * 0.86 + (abs(uv.x) + abs(uv.y)) * 0.22;
+          float shapeR = mix(roundR, facetR * facetR, smoothstep(0.45, 0.92, vChunk) * 0.55);
           if (shapeR > 1.0) discard;
 
           float sphere = sqrt(max(0.0, 1.0 - roundR));
-          vec3 normal = normalize(vec3(uv, sphere + 0.15));
-          float diffuse = max(0.0, dot(normal, normalize(vec3(-0.5, 0.72, 0.9))));
-          float rim = pow(1.0 - sphere, 2.2) * 0.28;
-          float highlight = pow(max(0.0, dot(normal, normalize(vec3(-0.35, 0.55, 1.0)))), 22.0);
-          float light = 0.46 + diffuse * 0.42 + rim + highlight * 0.32;
+          vec3 normal = normalize(vec3(uv, sphere + 0.12));
+          float diffuse = max(0.0, dot(normal, normalize(vec3(-0.55, 0.75, 0.85))));
+          float rim = pow(1.0 - sphere, 2.0) * 0.24;
+          float highlight = pow(max(0.0, dot(normal, normalize(vec3(-0.35, 0.58, 1.0)))), 20.0);
+          float light = 0.32 + diffuse * 0.52 + rim + highlight * 0.34;
 
-          vec3 iceTone = mix(vec3(0.68, 0.76, 0.86), vec3(0.92, 0.96, 1.0), clamp(brightness * 0.55 + highlight, 0.0, 1.0));
-          float edgeAlpha = 1.0 - smoothstep(0.76, 1.0, shapeR);
-          gl_FragColor = vec4(iceTone * (brightness + 0.22) * light * characterShade, edgeAlpha * reveal);
+          vec3 shadowTone = vec3(0.42, 0.48, 0.56);
+          vec3 litTone = vec3(0.92, 0.96, 1.0);
+          vec3 iceTone = mix(shadowTone, litTone, clamp(brightness * 0.68 + highlight * 0.6, 0.0, 1.0));
+          float edgeAlpha = 1.0 - smoothstep(0.74, 1.0, shapeR);
+          gl_FragColor = vec4(iceTone * (brightness + 0.24) * light * characterShade, edgeAlpha * reveal);
           #include <fog_fragment>
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -365,6 +394,7 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
     system.material.dispose();
     containment.points.dispose();
     containment.wire.dispose();
+    containment.wireMat.dispose();
     soundController.setParticleMotion(0);
   }, [system, containment]);
 
@@ -532,7 +562,7 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
     uniforms.swirlEnergy.value = reducedMotion ? 0 : Math.max(swirlEnergy.current, loopDissolve * 1.35);
     const dpr = gl.getPixelRatio();
     uniforms.pixelRatio.value = dpr;
-    uniforms.pointScale.value = size.height * dpr * 0.052;
+    uniforms.pointScale.value = size.height * dpr * 0.028;
     uniforms.reveal.value = reveal;
   });
 
@@ -541,11 +571,9 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
       <points geometry={system.geometry} material={system.material} frustumCulled={false} />
     </group>
     <group ref={cageGroup} position={[SCULPTURE_POSITION[0], SCULPTURE_POSITION[1] + 0.65, SCULPTURE_POSITION[2]]}>
-      <lineSegments geometry={containment.wire}>
-        <lineBasicMaterial color="#d8e9f8" transparent opacity={0.075} depthWrite={false} />
-      </lineSegments>
+      <lineSegments geometry={containment.wire} material={containment.wireMat} />
       <points geometry={containment.points}>
-        <pointsMaterial color="#eef7ff" size={0.045} transparent opacity={0.28} depthWrite={false} />
+        <pointsMaterial color="#eef7ff" size={0.032} transparent opacity={0.14} depthWrite={false} />
       </points>
     </group>
   </>;

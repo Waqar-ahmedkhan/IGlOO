@@ -18,6 +18,7 @@ interface PlaquePlacement {
   driftSpeed: number;
   phase: number;
   baseOpacity: number;
+  rotY?: number;
 }
 
 const PLAQUES: PlaquePlacement[] = [
@@ -32,6 +33,11 @@ const PLAQUES: PlaquePlacement[] = [
   { texIdx: 5, basePos: [-4.6, 1.8, -30.5], scale: [7.0, 2.2], driftSpeed: 0.12, phase: 3.8, baseOpacity: 0.36 },
   { texIdx: 2, basePos: [5.1, 1.35, -33.2], scale: [7.4, 2.3], driftSpeed: 0.09, phase: 1.1, baseOpacity: 0.32 },
   { texIdx: 4, basePos: [-4.4, -0.5, -36.5], scale: [6.8, 2.1], driftSpeed: 0.10, phase: 4.7, baseOpacity: 0.30 },
+  // Blurred background telemetry framing the lower particle sculpture stage well
+  { texIdx: 0, basePos: [-9.2, -35.2, -59.5], scale: [9.5, 3.0], driftSpeed: 0.08, phase: 0.5, baseOpacity: 0.34, rotY: 0.52 },
+  { texIdx: 2, basePos: [1.5, -35.4, -63.5], scale: [10.2, 3.2], driftSpeed: 0.07, phase: 2.2, baseOpacity: 0.30, rotY: 0.48 },
+  { texIdx: 1, basePos: [-3.5, -33.6, -61.8], scale: [8.8, 2.8], driftSpeed: 0.09, phase: 3.9, baseOpacity: 0.28, rotY: 0.50 },
+  { texIdx: 3, basePos: [-11.5, -37.2, -56.0], scale: [8.4, 2.6], driftSpeed: 0.06, phase: 1.7, baseOpacity: 0.26, rotY: 0.55 },
 ];
 
 function createBlurredTelemetryTexture(line1: string, line2: string): THREE.CanvasTexture {
@@ -110,6 +116,7 @@ export function BackgroundTelemetryField({
             meshRefs.current[idx] = el;
           }}
           position={p.basePos}
+          rotation={[0, p.rotY ?? 0, 0]}
           scale={[p.scale[0], p.scale[1], 1]}
           renderOrder={-2}
         >
