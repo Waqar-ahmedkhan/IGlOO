@@ -1,0 +1,41 @@
+:root {
+  /* Core polar monochromatic palette */
+  --color-bg-grey-blue: #a0a5b1;
+  --color-cold-mist: #cbd0d9;
+  --color-ice-white: #f2f6fa;
+  --color-frost-white: #ffffff;
+  --color-dark-stone: #727b8b;
+  --color-shadow-blue-grey: #555d70;
+  --color-detail-navy: #101724;
+  --color-luminous-blue: #d5ecff;
+
+  /* Derived transparent layers */
+  --color-ui-text: rgba(255, 255, 255, 0.94);
+  --color-ui-muted: rgba(242, 246, 250, 0.64);
+  --color-ui-faint: rgba(242, 246, 250, 0.34);
+  --color-ui-hairline: rgba(255, 255, 255, 0.24);
+  --color-ui-hairline-strong: rgba(255, 255, 255, 0.68);
+  --color-detail-backdrop: rgba(16, 23, 36, 0.74);
+
+  /* Typography */
+  --font-display: 'Rubik', 'Nunito', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Safe-area spacing */
+  --inset-top: max(24px, env(safe-area-inset-top, 24px));
+  --inset-right: max(28px, env(safe-area-inset-right, 28px));
+  --inset-bottom: max(24px, env(safe-area-inset-bottom, 24px));
+  --inset-left: max(28px, env(safe-area-inset-left, 28px));
+
+  /* Transitions */
+  --ease-arctic: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (max-width: 767px) {
+  :root {
+    --inset-top: max(18px, env(safe-area-inset-top, 18px));
+    --inset-right: max(18px, env(safe-area-inset-right, 18px));
+    --inset-bottom: max(18px, env(safe-area-inset-bottom, 18px));
+    --inset-left: max(18px, env(safe-area-inset-left, 18px));
+  }
+}
