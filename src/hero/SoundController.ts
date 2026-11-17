@@ -38,7 +38,7 @@ class HeroSoundController {
       if (this.ctx && this.masterGain) {
         const now = this.ctx.currentTime;
         this.masterGain.gain.cancelScheduledValues(now);
-        this.masterGain.gain.setTargetAtTime(0.3, now, 0.45);
+        this.masterGain.gain.setTargetAtTime(0.48, now, 0.4);
       }
     } else if (this.ctx && this.masterGain) {
       const now = this.ctx.currentTime;
@@ -485,26 +485,54 @@ class HeroSoundController {
     });
   }
 
-  // Crisp mechanical-ice UI selector click when switching sculptures or clicking arrows
+    // Crisp mechanical-ice UI selector click when switching sculptures or clicking arrows
   public playSelectorClick(direction = 1): void {
     if (!this.enabled || !this.ctx || !this.masterGain) return;
     const t = this.ctx.currentTime;
-    const base = direction >= 0 ? 1480 : 1240;
+    const base = direction >= 0 ? 1560 : 1280;
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(base, t);
-    osc.frequency.exponentialRampToValueAtTime(base * 0.58, t + 0.032);
+    osc.frequency.exponentialRampToValueAtTime(base * 0.62, t + 0.036);
 
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.linearRampToValueAtTime(0.028, t + 0.002);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.038);
+    gain.gain.linearRampToValueAtTime(0.036, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.044);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
     osc.start(t);
-    osc.stop(t + 0.045);
+    osc.stop(t + 0.05);
+  }
+
+  // Harmonic crystalline arpeggio tailored to each particle sculpture shape
+  public playMorphChord(shapeIndex: number): void {
+    if (!this.enabled || !this.ctx || !this.masterGain) return;
+    const t = this.ctx.currentTime;
+    const chords: readonly number[][] = [
+      [523.25, 659.25, 783.99, 1046.5], // 0: Cartoon playful sparkle major chord
+      [440.0, 659.25, 880.0],           // 1: LinkedIn sleek fifth stack
+      [587.33, 880.0, 1174.66],         // 2: X crisp crystalline glint
+      [392.0, 493.88, 783.99],          // 3: Medium warm resonance
+    ];
+    const notes = chords[((shapeIndex % chords.length) + chords.length) % chords.length];
+    notes.forEach((freq, idx) => {
+      if (!this.ctx || !this.masterGain) return;
+      const start = t + idx * 0.048;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = idx === 0 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.028 * (1 - idx * 0.14), start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.46);
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(start);
+      osc.stop(start + 0.5);
+    });
   }
 }
 

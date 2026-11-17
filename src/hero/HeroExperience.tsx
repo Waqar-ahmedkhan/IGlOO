@@ -284,10 +284,19 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
       pointerActiveRef.current = true;
     };
 
+    const unlockSoundOnGesture = (target: EventTarget | null) => {
+      if (target instanceof HTMLElement && target.closest('.sound-toggle')) return;
+      const st = heroStore.getState();
+      if (!st.soundEnabled && !st.soundUserMuted) {
+        heroStore.setState({ soundEnabled: true });
+        void soundController.setEnabled(true).catch(() => {});
+      }
+    };
     const onPointerMove = (e: PointerEvent) => {
       updateNdc(e.clientX, e.clientY);
     };
-    const onPointerDown = () => {
+    const onPointerDown = (e: PointerEvent) => {
+      unlockSoundOnGesture(e.target);
       if (heroStore.getState().introComplete) {
         scrollDirector.notifyInteraction();
       }
@@ -296,6 +305,7 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
       pointerActiveRef.current = false;
     };
     const onTouchStart = (e: TouchEvent) => {
+      unlockSoundOnGesture(e.target);
       if (e.touches.length === 0) return;
       touching = true;
       firstTouchX = e.touches[0].clientX;
@@ -327,6 +337,7 @@ function ExperienceStage({ profile, timelineRef }: ExperienceStageProps) {
       scrollDirector.applyWheelImpulse(delta);
     };
     const onKeyDown = (e: KeyboardEvent) => {
+      unlockSoundOnGesture(e.target);
       if (e.key === 'Escape' && portfolioStore.getState().selectedProjectId) {
         e.preventDefault();
         portfolioStore.closeProject();

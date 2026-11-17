@@ -49,30 +49,129 @@ function sampleThickSegment(
   return [x, y, z];
 }
 
+function sampleEllipsoid(
+  random: () => number,
+  cx: number,
+  cy: number,
+  cz: number,
+  rx: number,
+  ry: number,
+  rz: number,
+  surfaceBias = 0.2,
+  halo = 0,
+): [number, number, number] {
+  const a = random() * Math.PI * 2;
+  const b = Math.acos(random() * 2 - 1);
+  const r = halo ? 1.03 + random() * 0.22 : 0.48 + 0.52 * Math.pow(random(), surfaceBias);
+  return [
+    cx + Math.sin(b) * Math.cos(a) * r * rx,
+    cy + Math.cos(b) * r * ry,
+    cz + Math.sin(b) * Math.sin(a) * r * rz,
+  ];
+}
+
+function sampleCartoonFaceTarget(
+  random: () => number,
+  i: number,
+  isHalo: boolean,
+): [number, number, number, number, number, number] {
+  const bucket = i % 200;
+  const halo = isHalo ? 1 : 0;
+
+  // Expressive left & right cartoon ink eyes
+  if (bucket < 14) {
+    const [x, y, z] = sampleEllipsoid(random, -0.22, 0.34, 0.49, 0.115, 0.148, 0.08, 0.18, 0);
+    return [x, y, z, 0.07, 0.11, 0.2];
+  }
+  if (bucket < 28) {
+    const [x, y, z] = sampleEllipsoid(random, 0.22, 0.34, 0.49, 0.115, 0.148, 0.08, 0.18, 0);
+    return [x, y, z, 0.07, 0.11, 0.2];
+  }
+  // Crisp gleaming white eye catchlight sparkles
+  if (bucket < 32) {
+    const [x, y, z] = sampleEllipsoid(random, -0.26, 0.39, 0.56, 0.044, 0.048, 0.04, 0.15, 0);
+    return [x, y, z, 1.0, 1.0, 1.0];
+  }
+  if (bucket < 36) {
+    const [x, y, z] = sampleEllipsoid(random, 0.18, 0.39, 0.56, 0.044, 0.048, 0.04, 0.15, 0);
+    return [x, y, z, 1.0, 1.0, 1.0];
+  }
+  // Happy curved eyebrow arches
+  if (bucket < 42) {
+    const side = bucket % 2 === 0 ? -1 : 1;
+    const [x, y, z] = sampleEllipsoid(random, side * 0.22, 0.56, 0.46, 0.11, 0.028, 0.05, 0.18, 0);
+    return [x, y, z, 0.11, 0.17, 0.28];
+  }
+  // Cute rounded coral-amber cartoon beak / smile
+  if (bucket < 58) {
+    const [x, y, z] = sampleEllipsoid(random, 0, 0.14, 0.56, 0.17, 0.095, 0.15, 0.18, 0);
+    return [x, y, z, 1.0, 0.62, 0.28];
+  }
+  // Warm rosy blush cheeks
+  if (bucket < 68) {
+    const side = bucket % 2 === 0 ? -1 : 1;
+    const [x, y, z] = sampleEllipsoid(random, side * 0.38, 0.16, 0.46, 0.11, 0.072, 0.08, 0.22, 0);
+    return [x, y, z, 1.0, 0.66, 0.78];
+  }
+  // Bright snow-white cartoon face mask & cozy front belly
+  if (bucket < 96) {
+    const isBelly = bucket >= 82;
+    const [x, y, z] = isBelly
+      ? sampleEllipsoid(random, 0, -0.56, 0.24, 0.44, 0.42, 0.28, 0.22, 0)
+      : sampleEllipsoid(random, 0, 0.25, 0.2, 0.48, 0.43, 0.36, 0.22, 0);
+    return [x, y, z, 0.98, 0.995, 1.0];
+  }
+  // Plump round arctic-blue cartoon head shell
+  if (bucket < 136) {
+    const [x, y, z] = sampleEllipsoid(random, 0, 0.28, -0.02, 0.65, 0.62, 0.54, 0.22, halo);
+    return [x, y, z, 0.56, 0.73, 0.92];
+  }
+  // Chibi body, waving flippers & rounded amber feet
+  if (bucket < 166) {
+    if (bucket >= 158) {
+      const side = bucket % 2 === 0 ? -1 : 1;
+      const [x, y, z] = sampleEllipsoid(random, side * 0.27, -1.04, 0.16, 0.21, 0.105, 0.27, 0.2, halo);
+      return [x, y, z, 0.98, 0.62, 0.3];
+    }
+    if (bucket >= 150) {
+      const side = bucket % 2 === 0 ? -1 : 1;
+      const [x, y, z] = sampleEllipsoid(random, side * 0.64, -0.44, 0.04, 0.16, 0.34, 0.18, 0.22, halo);
+      return [x, y, z, 0.54, 0.71, 0.9];
+    }
+    const [x, y, z] = sampleEllipsoid(random, 0, -0.58, -0.05, 0.58, 0.52, 0.48, 0.22, halo);
+    return [x, y, z, 0.54, 0.71, 0.9];
+  }
+  // Plush icy silver studio headphone arch & chunky earcups
+  if (bucket < 180) {
+    const angle = random() * Math.PI;
+    const tube = random() * Math.PI * 2;
+    return [
+      Math.cos(angle) * (0.66 + Math.cos(tube) * 0.065),
+      0.28 + Math.sin(angle) * (0.73 + Math.cos(tube) * 0.065),
+      Math.sin(tube) * 0.085,
+      0.86,
+      0.93,
+      1.0,
+    ];
+  }
+  const side = bucket % 2 === 0 ? -1 : 1;
+  const [x, y, z] = sampleEllipsoid(random, side * 0.66, 0.28, 0.02, 0.17, 0.26, 0.24, 0.2, halo);
+  return [x, y, z, 0.86, 0.93, 1.0];
+}
+
 function sampleLinkedInTarget(random: () => number, i: number, isHalo: boolean): [number, number, number] {
   const bucket = i % 100;
   const halo = isHalo ? 1 : 0;
 
-  // 'i' dot sphere
   if (bucket < 14) {
-    const a = random() * Math.PI * 2;
-    const b = Math.acos(random() * 2 - 1);
-    const r = isHalo ? 0.16 + random() * 0.08 : 0.42 + 0.58 * Math.pow(random(), 0.25);
-    return [
-      -0.46 + Math.sin(b) * Math.cos(a) * r * 0.155,
-      0.56 + Math.cos(b) * r * 0.155,
-      Math.sin(b) * Math.sin(a) * r * 0.19,
-    ];
+    return sampleEllipsoid(random, -0.46, 0.56, 0, 0.155, 0.155, 0.19, 0.25, halo);
   }
-  // 'i' stem
   if (bucket < 36) {
     return sampleThickSegment(random, -0.46, -0.76, -0.46, 0.22, 0.135, 0.22, halo);
   }
-  // 'n' left vertical stem
   if (bucket < 54) {
     return sampleThickSegment(random, -0.12, -0.76, -0.12, 0.22, 0.13, 0.22, halo);
   }
-  // 'n' smooth rounded shoulder arch connecting (-0.12, -0.02) to (0.60, -0.02)
   if (bucket < 76) {
     const theta = random() * Math.PI;
     const radialOffset = (random() * 2 - 1) * 0.125;
@@ -85,11 +184,9 @@ function sampleLinkedInTarget(random: () => number, i: number, isHalo: boolean):
       (random() * 2 - 1) * 0.22 + (random() - 0.5) * haloJitter,
     ];
   }
-  // 'n' right vertical stem
   if (bucket < 94) {
     return sampleThickSegment(random, 0.60, -0.02, 0.60, -0.76, 0.13, 0.22, halo);
   }
-  // Subtle rounded-square crystalline orbital outline framing the 'in' monogram
   const side = bucket % 4;
   const u = random() * 1.48 - 0.74;
   const edge = 0.86;
@@ -100,18 +197,26 @@ function sampleLinkedInTarget(random: () => number, i: number, isHalo: boolean):
   return [edge, u, depth];
 }
 
-function targets(count: number) {
+function targets(count: number): { shapes: Float32Array[]; cartoonColors: Uint8Array } {
   const random = createSeededRandom(429);
-  return [0, 1, 2].map(shape => {
+  const cartoonColors = new Uint8Array(count * 3);
+  const shapes = [0, 1, 2, 3].map(shape => {
     const points = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       let x = 0, y = 0, z = 0;
       const isHalo = (i % 100) >= 92;
 
       if (shape === 0) {
-        [x, y, z] = sampleLinkedInTarget(random, i, isHalo);
+        const res = sampleCartoonFaceTarget(random, i, isHalo);
+        x = res[0];
+        y = res[1];
+        z = res[2];
+        cartoonColors[i * 3] = Math.round(res[3] * 255);
+        cartoonColors[i * 3 + 1] = Math.round(res[4] * 255);
+        cartoonColors[i * 3 + 2] = Math.round(res[5] * 255);
       } else if (shape === 1) {
-        // Iconic Twitter/X: solid '/' bar crossed by hollow double-walled '\' ribbon + flat serif caps
+        [x, y, z] = sampleLinkedInTarget(random, i, isHalo);
+      } else if (shape === 2) {
         const bucket = i % 20;
         const halo = isHalo ? 1 : 0;
         if (bucket < 8) {
@@ -126,7 +231,6 @@ function targets(count: number) {
           [x, y, z] = sampleThickSegment(random, 0.52, -0.94, 0.80, -0.94, 0.05, 0.18, 0);
         }
       } else {
-        // Bold architectural editorial serif M (Medium) with top & bottom serifs + sharp center V
         const bucket = i % 24;
         const halo = isHalo ? 1 : 0;
         if (bucket < 5) {
@@ -154,6 +258,7 @@ function targets(count: number) {
     }
     return points;
   });
+  return { shapes, cartoonColors };
 }
 
 // Shared click impulse signal so clicking SocialSelector buttons or arrows triggers a particle shockwave too
@@ -180,7 +285,7 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
   const { size, pointer, camera, gl } = useThree();
   const cores = typeof navigator === 'undefined' ? 4 : navigator.hardwareConcurrency || 4;
   // Dense crisp granular ice dots with luminous larger crystalline pearls
-  const count = size.width < 768 ? 72000 : size.width < 1440 || cores < 8 ? 185000 : 250000;
+  const count = size.width < 768 ? 72000 : size.width < 1440 || cores < 8 ? 175000 : 225000;
 
   const containment = useMemo(() => {
     const cyl = new THREE.CylinderGeometry(2.08, 2.22, 6.4, 28, 12, true);
@@ -197,7 +302,7 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
         varying float vY;
         void main() {
           float fade = smoothstep(-3.1, -0.8, vY) * (1.0 - smoothstep(0.8, 3.1, vY));
-          gl_FragColor = vec4(0.85, 0.92, 0.98, fade * 0.042);
+          gl_FragColor = vec4(0.85, 0.92, 0.98, fade * 0.024);
         }
       `,
       transparent: true,
@@ -207,16 +312,17 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
   }, []);
 
   const system = useMemo(() => {
-    const shapes = targets(count);
+    const { shapes, cartoonColors } = targets(count);
     const geometry = new THREE.BufferGeometry();
     // Targets fit inside [-2, 2]; normalized shorts halve the target buffer bandwidth.
-    ['position', 'targetX', 'targetM'].forEach((name, shape) => {
+    ['position', 'targetIN', 'targetX', 'targetM'].forEach((name, shape) => {
       const packed = new Int16Array(count * 3);
       for (let i = 0; i < packed.length; i++) {
         packed[i] = Math.max(-32767, Math.min(32767, Math.round(shapes[shape][i] * 16383.5)));
       }
       geometry.setAttribute(name, new THREE.BufferAttribute(packed, 3, true));
     });
+    geometry.setAttribute('cartoonColor', new THREE.BufferAttribute(cartoonColors, 3, true));
     geometry.setDrawRange(0, count);
     const seeds = new Uint8Array(count);
     const random = createSeededRandom(98);
@@ -226,7 +332,8 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
     const material = new THREE.ShaderMaterial({
       uniforms: {
         ...THREE.UniformsLib.fog,
-        weights: { value: new THREE.Vector3(1, 0, 0) },
+        weights: { value: new THREE.Vector4(1, 0, 0, 0) },
+        uCartoonWeight: { value: 1 },
         time: { value: 0 },
         pulse: { value: 0 },
         motion: { value: reducedMotion ? 0 : 1 },
@@ -241,24 +348,28 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
         reveal: { value: 0 },
       },
       vertexShader: `
+        attribute vec3 targetIN;
         attribute vec3 targetX;
         attribute vec3 targetM;
+        attribute vec3 cartoonColor;
         attribute float seed;
-        uniform vec3 weights, cursor, clickPos;
+        uniform vec4 weights;
+        uniform vec3 cursor, clickPos;
         uniform float time, pulse, motion, disturbance, clickBurst, clickWave, swirlEnergy, pointScale, pixelRatio;
         varying float brightness;
-        varying float characterShade;
+        varying vec3 vColorTint;
         varying float vChunk;
         #include <fog_pars_vertex>
         void main() {
-          vec3 p = (position * weights.x + targetX * weights.y + targetM * weights.z) * 2.0;
+          vec3 p = (position * weights.x + targetIN * weights.y + targetX * weights.z + targetM * weights.w) * 2.0;
           float influence = 0.0;
           float clickGlow = 0.0;
           float outerSeed = smoothstep(0.58, 1.0, seed);
-          vChunk = pow(seed, 1.35);
+          vChunk = pow(seed, 1.32);
+          vColorTint = cartoonColor;
 
           // Silky orbital spiral bloom during shape transitions so morphs feel fluid & sculpted
-          float maxW = max(weights.x, max(weights.y, weights.z));
+          float maxW = max(max(weights.x, weights.y), max(weights.z, weights.w));
           float transitionMix = clamp((1.0 - maxW) * 1.48, 0.0, 1.0);
 
           if (motion > 0.5) {
@@ -325,8 +436,6 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
             }
           }
 
-          characterShade = 1.0;
-
           // Traveling surface highlights across luminous crystalline spheres
           float sheen = 0.5 + 0.5 * sin(p.y * 2.4 + p.x * 1.8 - time * 0.95 * motion);
           sheen = pow(sheen, 3.2);
@@ -340,8 +449,8 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
           gl_Position = projectionMatrix * mv;
 
           // Bigger, cleaner optical ice dots across core and outer shards
-          float sizeBoost = 0.92 + vChunk * 1.72 + outerSeed * 0.48 + clickGlow * 0.85 + influence * 0.42 + transitionMix * 0.32;
-          gl_PointSize = clamp(pointScale * sizeBoost / max(0.5, -mv.z), 2.5 * pixelRatio, 17.5 * pixelRatio);
+          float sizeBoost = 0.96 + vChunk * 1.76 + outerSeed * 0.48 + clickGlow * 0.85 + influence * 0.42 + transitionMix * 0.32;
+          gl_PointSize = clamp(pointScale * sizeBoost / max(0.5, -mv.z), 2.8 * pixelRatio, 18.5 * pixelRatio);
 
           vec3 surfaceNormal = normalize(vec3(p.x * 0.92, p.y * 0.72, p.z * 1.15) + vec3(0.001));
           float formLight = 0.44 + max(0.0, dot(surfaceNormal, normalize(vec3(-0.55, 0.78, 0.55)))) * 0.68;
@@ -350,8 +459,9 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
       `,
       fragmentShader: `
         uniform float reveal;
+        uniform float uCartoonWeight;
         varying float brightness;
-        varying float characterShade;
+        varying vec3 vColorTint;
         varying float vChunk;
         #include <fog_pars_fragment>
         void main() {
@@ -372,8 +482,11 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
           vec3 shadowTone = vec3(0.56, 0.65, 0.76);
           vec3 litTone = vec3(0.98, 0.995, 1.0);
           vec3 iceTone = mix(shadowTone, litTone, clamp(brightness * 0.72 + highlight * 0.65, 0.0, 1.0));
+          vec3 chromeRgb = iceTone * (brightness + 0.32) * light;
+          vec3 cartoonRgb = (vColorTint * (0.68 + diffuse * 0.42 + highlight * 0.22) + vec3(rim * 0.24));
+          vec3 finalRgb = mix(chromeRgb, cartoonRgb, clamp(uCartoonWeight, 0.0, 1.0));
           float edgeAlpha = 1.0 - smoothstep(0.64, 1.0, shapeR);
-          gl_FragColor = vec4(iceTone * (brightness + 0.32) * light * characterShade, edgeAlpha * reveal);
+          gl_FragColor = vec4(finalRgb, edgeAlpha * reveal);
           #include <fog_fragment>
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -453,8 +566,9 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
       }
 
       if (clickedOnDots) {
-        setSocialSelection(selection.index + 1);
+        const nextShape = setSocialSelection(selection.index + 1);
         soundController.playSelectorClick(1);
+        soundController.playMorphChord(nextShape);
       }
 
       clickBurst.current = Math.min(1.8, clickBurst.current + 1.0);
@@ -535,10 +649,12 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
     }
 
     const uniforms = system.material.uniforms;
-    const weights = uniforms.weights.value as THREE.Vector3;
+    const weights = uniforms.weights.value as THREE.Vector4;
     weights.x = THREE.MathUtils.damp(weights.x, selection.index === 0 ? 1 : 0, 4.6, dt);
     weights.y = THREE.MathUtils.damp(weights.y, selection.index === 1 ? 1 : 0, 4.6, dt);
     weights.z = THREE.MathUtils.damp(weights.z, selection.index === 2 ? 1 : 0, 4.6, dt);
+    weights.w = THREE.MathUtils.damp(weights.w, selection.index === 3 ? 1 : 0, 4.6, dt);
+    uniforms.uCartoonWeight.value = weights.x;
 
     group.current.position.y = SCULPTURE_POSITION[1] + loopDissolve * 2.2;
     group.current.rotation.y = reducedMotion ? 0 : Math.sin(elapsed.current * 0.24) * 0.24 + loopDissolve * 0.9;
@@ -596,7 +712,7 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
     <group ref={cageGroup} position={[SCULPTURE_POSITION[0], SCULPTURE_POSITION[1] + 0.65, SCULPTURE_POSITION[2]]}>
       <lineSegments geometry={containment.wire} material={containment.wireMat} />
       <points geometry={containment.points}>
-        <pointsMaterial color="#eef7ff" size={0.032} transparent opacity={0.14} depthWrite={false} />
+        <pointsMaterial color="#eef7ff" size={0.028} transparent opacity={0.09} depthWrite={false} />
       </points>
     </group>
   </>;

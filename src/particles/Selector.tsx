@@ -21,7 +21,8 @@ export function SocialSelector() {
     setActive(next);
     sculptureBridge.triggerBurst();
     soundController.playSelectorClick(dir);
-    soundController.playParticleClickBurst(0.8);
+    soundController.playParticleClickBurst(0.85);
+    soundController.playMorphChord(next);
   };
   useEffect(() => subscribeSelection(setActive), []);
   useEffect(() => {
@@ -83,20 +84,32 @@ export function SocialSelector() {
             </button>
           ))}
           <span className="social-dock-divider" aria-hidden="true" />
-          <a
-            className="social-visit-link"
-            href={destinations[active]}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Open ${names[active]} in new tab`}
-            onClick={() => {
-              sculptureBridge.triggerBurst();
-              soundController.playParticleClickBurst(0.95);
-            }}
-          >
-            <span>VISIT</span>
-            <span aria-hidden="true">↗</span>
-          </a>
+          {destinations[active] ? (
+            <a
+              className="social-visit-link"
+              href={destinations[active]}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open ${names[active]} in new tab`}
+              onClick={() => {
+                sculptureBridge.triggerBurst();
+                soundController.playParticleClickBurst(0.95);
+              }}
+            >
+              <span>VISIT</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="social-visit-link"
+              aria-label="Morph to next shape"
+              onClick={() => choose(active + 1, 1)}
+            >
+              <span>MORPH</span>
+              <span aria-hidden="true">↻</span>
+            </button>
+          )}
         </div>
       </div>
 

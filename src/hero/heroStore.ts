@@ -24,6 +24,7 @@ export type HeroState = {
   introComplete: boolean;
   uiVisible: boolean;
   soundEnabled: boolean;
+  soundUserMuted: boolean;
   pointerInteractive: boolean;
   heroScroll: number;
   replayNonce: number;
@@ -76,6 +77,7 @@ const initialState: HeroState = {
   introComplete: false,
   uiVisible: false,
   soundEnabled: false,
+  soundUserMuted: false,
   pointerInteractive: false,
   heroScroll: 0,
   replayNonce: 0,

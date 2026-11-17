@@ -151,7 +151,7 @@ export function HeroUI() {
 
   const handleToggleSound = () => {
     const next = !soundEnabled;
-    heroStore.setState({ soundEnabled: next });
+    heroStore.setState({ soundEnabled: next, soundUserMuted: !next });
     void soundController.setEnabled(next).catch(() => {});
   };
 

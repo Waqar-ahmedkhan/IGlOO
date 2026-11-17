@@ -1,12 +1,13 @@
 export const selection = { index: 0 };
-export const names = ['LINKEDIN', 'X / TWITTER', 'MEDIUM'];
-export const badges = ['IN', '𝕏', 'M'];
-export const destinations = ['https://www.linkedin.com/', 'https://x.com/', 'https://medium.com/'];
+export const names = ['CARTOON', 'LINKEDIN', 'X / TWITTER', 'MEDIUM'];
+export const badges = ['☺', 'IN', '𝕏', 'M'];
+export const destinations = ['', 'https://www.linkedin.com/', 'https://x.com/', 'https://medium.com/'];
 
 const selectionListeners = new Set<(index: number) => void>();
 
 export function setSocialSelection(index: number): number {
-  const next = ((index % 3) + 3) % 3;
+  const count = names.length;
+  const next = ((index % count) + count) % count;
   selection.index = next;
   selectionListeners.forEach((fn) => fn(next));
   return next;

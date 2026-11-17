@@ -6,7 +6,7 @@ import { createSeededRandom, fbm2D, smoothstep } from '../utils/noise';
 import { soundController } from '../hero/SoundController';
 import { getPortalAssemblyPose, getPortalProgress } from './PortalCameraPath';
 import { FrostGap } from './FrostGap';
-import { INNER_ARCS, PORTAL_LAYOUT } from './layout';
+import { PORTAL_LAYOUT } from './layout';
 import { PLATFORM_POSITION } from './stage';
 
 interface PortalSceneProps {
@@ -140,25 +140,6 @@ function PortalTunnel({ progressRef }: { progressRef: React.MutableRefObject<num
   </>;
 }
 
-function InnerArcGeometry({ progressRef, reducedMotion }: { progressRef: React.MutableRefObject<number>; reducedMotion: boolean }) {
-  const group = useRef<THREE.Group>(null);
-  const idle = useRef(0);
-  const arcs = useMemo(() => INNER_ARCS.map(arc => createArcGeometry(arc.inner, arc.outer, arc.angle, arc.depth, PORTAL_LAYOUT.arcBevel)), []);
-  useEffect(() => () => arcs.forEach(arc => arc.dispose()), [arcs]);
-  useFrame((_, delta) => {
-    if (!group.current) return;
-    const p = progressRef.current;
-    if (!reducedMotion && p >= 0.7) idle.current += Math.min(delta, 0.05);
-    if (p < 0.7) idle.current = 0;
-    group.current.visible = p > 0.32;
-    group.current.scale.setScalar(0.8 + smoothstep(0.32, 0.58, p) * 0.2);
-    group.current.children.forEach((child, i) => { child.rotation.z = i * 1.9 + (1 - smoothstep(0.32, 0.65, p)) * (i % 2 ? -0.4 : 0.4) + (reducedMotion ? 0 : idle.current * (i % 2 ? -0.09 : 0.06)); });
-  });
-  return <group ref={group}>{arcs.map((geometry, i) => <mesh key={i} geometry={geometry} position={[0, 0, i * 0.24 - 0.1]} castShadow>
-    <meshStandardMaterial color={i === 1 ? '#8799aa' : '#c2cdd7'} metalness={0.22} roughness={0.72} />
-  </mesh>)}</group>;
-}
-
 function PortalEnergy({ progressRef }: { progressRef: React.MutableRefObject<number> }) {
   const particles = useRef<THREE.Points>(null);
   const particleGeometry = useMemo(() => {
@@ -175,14 +156,12 @@ function PortalEnergy({ progressRef }: { progressRef: React.MutableRefObject<num
   }, []);
   useEffect(() => () => particleGeometry.dispose(), [particleGeometry]);
   const glow = useRef<THREE.PointLight>(null);
-  const material = useRef<THREE.MeshBasicMaterial>(null);
   useFrame(({ clock }) => {
     const strength = smoothstep(0.48, 0.75, progressRef.current);
     if (particles.current) { particles.current.visible = strength > 0.01; particles.current.rotation.z = clock.elapsedTime * 0.035; }
     if (glow.current) glow.current.intensity = strength * 5;
-    if (material.current) material.current.opacity = strength * 0.16;
   });
-  return <><points ref={particles} geometry={particleGeometry}><pointsMaterial color="#e9f7ff" size={0.025} transparent opacity={0.55} depthWrite={false} /></points><pointLight ref={glow} color="#d4eeff" distance={9} intensity={0} /><mesh position={[0, 0, -0.5]}><sphereGeometry args={[0.18, 16, 12]} /><meshBasicMaterial ref={material} color="#f6fbff" transparent opacity={0} /></mesh></>;
+  return <><points ref={particles} geometry={particleGeometry}><pointsMaterial color="#e9f7ff" size={0.025} transparent opacity={0.55} depthWrite={false} /></points><pointLight ref={glow} color="#d4eeff" distance={9} intensity={0} /></>;
 }
 
 // Revolved, rounded track profiles give the stage real recessed channels and side walls.
@@ -266,7 +245,6 @@ export function PortalScene({ scrollProgressRef, reducedMotion }: PortalScenePro
     <group ref={group} position={[0, 0, -36]}>
       <PortalSegments progressRef={progressRef} />
       <PortalTunnel progressRef={progressRef} />
-      <InnerArcGeometry progressRef={progressRef} reducedMotion={reducedMotion} />
       <PortalEnergy progressRef={progressRef} />
       <FrostGap progressRef={progressRef} reducedMotion={reducedMotion} />
       {Array.from({ length: size.width < 768 ? 4 : 8 }, (_, i) => <mesh key={i} position={[Math.cos(i * Math.PI / 4) * 2.96, Math.sin(i * Math.PI / 4) * 2.96, 0.35]} rotation={[0, 0, i * Math.PI / 4]}><boxGeometry args={[0.17, 0.28, 0.22]} /><meshStandardMaterial color="#aab9c7" roughness={0.5} metalness={0.4} /></mesh>)}
