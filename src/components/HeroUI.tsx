@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { heroStore, hudBridge, useHeroSelector } from '../hero/heroStore';
 import { soundController } from '../hero/SoundController';
 import { usePortfolioSelector } from '../portfolio/portfolioStore';
+import { useScrollStateSelector } from '../experience/ScrollDirector';
 import { ScrambleText } from './ScrambleText';
 
 export const HERO_MANIFESTO_COPY =
@@ -18,6 +19,7 @@ export function HeroUI() {
   const heroScroll = useHeroSelector((s) => s.heroScroll);
   const replayNonce = useHeroSelector((s) => s.replayNonce);
   const detailOpen = usePortfolioSelector((s) => Boolean(s.selectedProjectId));
+  const inParticleStage = useScrollStateSelector((s) => s.stateName === 'particle-stage');
 
   // 60fps imperative SVG & exit dissolve refs (never trigger React state re-renders)
   const vertexTextRefs = useRef<(SVGTextElement | null)[]>([]);
@@ -123,7 +125,8 @@ export function HeroUI() {
 
       if (phaseHudRef.current) {
         phaseHudRef.current.style.opacity = uiVisible && !detailOpen ? '1' : '0';
-        phaseHudRef.current.dataset.stage = hudBridge.cyclePhaseIndex === 5 ? 'particle' : 'default';
+        phaseHudRef.current.dataset.stage =
+          inParticleStage || hudBridge.cyclePhaseIndex >= 5 ? 'particle' : 'default';
       }
       if (phaseCodeRef.current && phaseCodeRef.current.textContent !== hudBridge.cyclePhaseCode) {
         phaseCodeRef.current.textContent = hudBridge.cyclePhaseCode;
@@ -144,7 +147,7 @@ export function HeroUI() {
 
     sync();
     return hudBridge.subscribe(sync);
-  }, [uiVisible, heroScroll, detailOpen]);
+  }, [uiVisible, heroScroll, detailOpen, inParticleStage]);
 
   const handleToggleSound = () => {
     const next = !soundEnabled;

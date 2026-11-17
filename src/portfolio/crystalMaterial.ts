@@ -27,28 +27,28 @@ export function createIceCrystalMaterial(): {
   const roughnessMap = getCrystalRoughnessTexture();
 
   const material = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color('#EEF6FF'),
+    color: new THREE.Color('#F2F8FF'),
     transmission: 0.96,
-    ior: 1.48,
-    thickness: 1.65,
-    dispersion: 5.8,
-    roughness: 0.085,
+    ior: 1.24,
+    thickness: 0.78,
+    dispersion: 2.2,
+    roughness: 0.055,
     roughnessMap,
     bumpMap,
-    bumpScale: 0.018,
-    metalness: 0.02,
+    bumpScale: 0.012,
+    metalness: 0.01,
     reflectivity: 1.0,
     clearcoat: 1.0,
-    clearcoatRoughness: 0.045,
-    attenuationColor: new THREE.Color('#D6ECFF'),
-    attenuationDistance: 3.4,
+    clearcoatRoughness: 0.03,
+    attenuationColor: new THREE.Color('#DCF0FF'),
+    attenuationDistance: 4.0,
     specularIntensity: 1.0,
     specularColor: new THREE.Color('#FFFFFF'),
     flatShading: true,
-    envMapIntensity: 1.75,
+    envMapIntensity: 1.85,
   });
 
-  material.customProgramCacheKey = () => 'igloo-ice-crystal-glass-v2';
+  material.customProgramCacheKey = () => 'igloo-ice-crystal-glass-v3';
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uniforms.uTime;

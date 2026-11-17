@@ -9,7 +9,7 @@ import { getSculptureReveal } from './reveal';
 import { SCULPTURE_POSITION } from '../portal/stage';
 import { heroStore } from '../hero/heroStore';
 
-import { selection } from './social';
+import { selection, setSocialSelection } from './social';
 
 function sampleThickSegment(
   random: () => number,
@@ -31,7 +31,7 @@ function sampleThickSegment(
   const ny = dx / len;
 
   const across = random() * 2 - 1;
-  const edgeBias = Math.sign(across) * Math.pow(Math.abs(across), 0.76) * halfWidth;
+  const edgeBias = Math.sign(across) * Math.pow(Math.abs(across), 0.72) * halfWidth;
   const depthBias = (random() * 2 - 1) * halfDepth;
 
   let x = cx + nx * edgeBias;
@@ -39,101 +39,112 @@ function sampleThickSegment(
   let z = depthBias;
 
   if (haloFactor > 0) {
-    const spread = (0.08 + random() * 0.28) * haloFactor;
+    const spread = (0.07 + random() * 0.24) * haloFactor;
     const ang = random() * Math.PI * 2;
     x += Math.cos(ang) * spread;
     y += Math.sin(ang) * spread * 1.1;
-    z += (random() - 0.5) * spread * 1.3;
+    z += (random() - 0.5) * spread * 1.25;
   }
 
   return [x, y, z];
 }
 
+function sampleLinkedInTarget(random: () => number, i: number, isHalo: boolean): [number, number, number] {
+  const bucket = i % 100;
+  const halo = isHalo ? 1 : 0;
+
+  // 'i' dot sphere
+  if (bucket < 14) {
+    const a = random() * Math.PI * 2;
+    const b = Math.acos(random() * 2 - 1);
+    const r = isHalo ? 0.16 + random() * 0.08 : 0.42 + 0.58 * Math.pow(random(), 0.25);
+    return [
+      -0.46 + Math.sin(b) * Math.cos(a) * r * 0.155,
+      0.56 + Math.cos(b) * r * 0.155,
+      Math.sin(b) * Math.sin(a) * r * 0.19,
+    ];
+  }
+  // 'i' stem
+  if (bucket < 36) {
+    return sampleThickSegment(random, -0.46, -0.76, -0.46, 0.22, 0.135, 0.22, halo);
+  }
+  // 'n' left vertical stem
+  if (bucket < 54) {
+    return sampleThickSegment(random, -0.12, -0.76, -0.12, 0.22, 0.13, 0.22, halo);
+  }
+  // 'n' smooth rounded shoulder arch connecting (-0.12, -0.02) to (0.60, -0.02)
+  if (bucket < 76) {
+    const theta = random() * Math.PI;
+    const radialOffset = (random() * 2 - 1) * 0.125;
+    const r = 0.36 + radialOffset;
+    const haloJitter = halo * (0.06 + random() * 0.16);
+    const jAng = random() * Math.PI * 2;
+    return [
+      0.24 - Math.cos(theta) * r + Math.cos(jAng) * haloJitter,
+      -0.02 + Math.sin(theta) * r + Math.sin(jAng) * haloJitter,
+      (random() * 2 - 1) * 0.22 + (random() - 0.5) * haloJitter,
+    ];
+  }
+  // 'n' right vertical stem
+  if (bucket < 94) {
+    return sampleThickSegment(random, 0.60, -0.02, 0.60, -0.76, 0.13, 0.22, halo);
+  }
+  // Subtle rounded-square crystalline orbital outline framing the 'in' monogram
+  const side = bucket % 4;
+  const u = random() * 1.48 - 0.74;
+  const edge = 0.86;
+  const depth = (random() * 2 - 1) * 0.16;
+  if (side === 0) return [u, edge, depth];
+  if (side === 1) return [u, -edge, depth];
+  if (side === 2) return [-edge, u, depth];
+  return [edge, u, depth];
+}
+
 function targets(count: number) {
   const random = createSeededRandom(429);
-  const parts = [
-    [0, -0.34, 0, 0.64, 0.85, 0.48], // 0: plump body
-    [0, 0.68, 0, 0.56, 0.52, 0.48],  // 1: head
-    [-0.68, -0.22, 0, 0.16, 0.50, 0.22], // 2: left flipper
-    [0.68, -0.22, 0, 0.16, 0.50, 0.22],  // 3: right flipper
-    [-0.28, -1.14, 0.12, 0.24, 0.12, 0.34], // 4: left foot
-    [0.28, -1.14, 0.12, 0.24, 0.12, 0.34],  // 5: right foot
-    [0, 0.60, 0.46, 0.17, 0.11, 0.22],      // 6: beak
-    [-0.58, 0.70, 0, 0.16, 0.28, 0.28],     // 7: left headphone earcup
-    [0.58, 0.70, 0, 0.16, 0.28, 0.28],      // 8: right headphone earcup
-  ];
   return [0, 1, 2].map(shape => {
     const points = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       let x = 0, y = 0, z = 0;
-      const isHalo = (i % 100) >= 91;
+      const isHalo = (i % 100) >= 92;
 
       if (shape === 0) {
-        const part = i % 100;
-        // Distinct arched headphone headband above crown + chunky earcups + flippers
-        if (part >= 76 && part < 83) {
-          const angle = random() * Math.PI;
-          const tube = random() * Math.PI * 2;
-          x = Math.cos(angle) * (0.60 + Math.cos(tube) * 0.052);
-          y = 0.70 + Math.sin(angle) * (0.68 + Math.cos(tube) * 0.052);
-          z = Math.sin(tube) * 0.072;
-        } else {
-          const spec = parts[part < 46 ? 0 : part < 74 ? 1 : part < 86 ? 7 : part < 89 ? 8 : part < 91 ? 2 : part < 93 ? 3 : part < 96 ? 4 : part < 98 ? 5 : 6];
-          const a = random() * Math.PI * 2;
-          const b = Math.acos(random() * 2 - 1);
-          const r = isHalo ? 1.03 + random() * 0.24 : 0.35 + 0.65 * Math.pow(random(), 0.22);
-          x = spec[0] + Math.sin(b) * Math.cos(a) * r * spec[3];
-          y = spec[1] + Math.cos(b) * r * spec[4];
-          z = spec[2] + Math.sin(b) * Math.sin(a) * r * spec[5];
-        }
+        [x, y, z] = sampleLinkedInTarget(random, i, isHalo);
       } else if (shape === 1) {
         // Iconic Twitter/X: solid '/' bar crossed by hollow double-walled '\' ribbon + flat serif caps
         const bucket = i % 20;
         const halo = isHalo ? 1 : 0;
         if (bucket < 8) {
-          // Solid diagonal '/' bar
-          [x, y, z] = sampleThickSegment(random, -0.68, -0.94, 0.68, 0.94, 0.09, 0.16, halo);
+          [x, y, z] = sampleThickSegment(random, -0.68, -0.94, 0.68, 0.94, 0.1, 0.18, halo);
         } else if (bucket < 13) {
-          // Upper-right parallel wall of '\' hollow bar
-          [x, y, z] = sampleThickSegment(random, -0.58, 0.94, 0.76, -0.94, 0.05, 0.16, halo);
+          [x, y, z] = sampleThickSegment(random, -0.58, 0.94, 0.76, -0.94, 0.055, 0.18, halo);
         } else if (bucket < 18) {
-          // Lower-left parallel wall of '\' hollow bar
-          [x, y, z] = sampleThickSegment(random, -0.78, 0.94, 0.56, -0.94, 0.05, 0.16, halo);
+          [x, y, z] = sampleThickSegment(random, -0.78, 0.94, 0.56, -0.94, 0.055, 0.18, halo);
         } else if (bucket === 18) {
-          // Top-left cap
-          [x, y, z] = sampleThickSegment(random, -0.82, 0.94, -0.54, 0.94, 0.045, 0.16, 0);
+          [x, y, z] = sampleThickSegment(random, -0.82, 0.94, -0.54, 0.94, 0.05, 0.18, 0);
         } else {
-          // Bottom-right cap
-          [x, y, z] = sampleThickSegment(random, 0.52, -0.94, 0.80, -0.94, 0.045, 0.16, 0);
+          [x, y, z] = sampleThickSegment(random, 0.52, -0.94, 0.80, -0.94, 0.05, 0.18, 0);
         }
       } else {
         // Bold architectural editorial serif M (Medium) with top & bottom serifs + sharp center V
         const bucket = i % 24;
         const halo = isHalo ? 1 : 0;
         if (bucket < 5) {
-          // Left pillar
-          [x, y, z] = sampleThickSegment(random, -0.58, -0.92, -0.58, 0.88, 0.115, 0.21, halo);
+          [x, y, z] = sampleThickSegment(random, -0.58, -0.92, -0.58, 0.88, 0.125, 0.22, halo);
         } else if (bucket < 10) {
-          // Right pillar
-          [x, y, z] = sampleThickSegment(random, 0.58, -0.92, 0.58, 0.88, 0.115, 0.21, halo);
+          [x, y, z] = sampleThickSegment(random, 0.58, -0.92, 0.58, 0.88, 0.125, 0.22, halo);
         } else if (bucket < 15) {
-          // Left diagonal stem into sharp center V
-          [x, y, z] = sampleThickSegment(random, -0.54, 0.86, 0.0, -0.46, 0.115, 0.21, halo);
+          [x, y, z] = sampleThickSegment(random, -0.54, 0.86, 0.0, -0.46, 0.125, 0.22, halo);
         } else if (bucket < 20) {
-          // Right diagonal stem out of sharp center V
-          [x, y, z] = sampleThickSegment(random, 0.0, -0.46, 0.54, 0.86, 0.115, 0.21, halo);
+          [x, y, z] = sampleThickSegment(random, 0.0, -0.46, 0.54, 0.86, 0.125, 0.22, halo);
         } else if (bucket === 20) {
-          // Left top serif
-          [x, y, z] = sampleThickSegment(random, -0.78, 0.88, -0.42, 0.88, 0.06, 0.20, 0);
+          [x, y, z] = sampleThickSegment(random, -0.78, 0.88, -0.42, 0.88, 0.065, 0.21, 0);
         } else if (bucket === 21) {
-          // Left bottom serif
-          [x, y, z] = sampleThickSegment(random, -0.78, -0.92, -0.38, -0.92, 0.06, 0.20, 0);
+          [x, y, z] = sampleThickSegment(random, -0.78, -0.92, -0.38, -0.92, 0.065, 0.21, 0);
         } else if (bucket === 22) {
-          // Right top serif
-          [x, y, z] = sampleThickSegment(random, 0.42, 0.88, 0.78, 0.88, 0.06, 0.20, 0);
+          [x, y, z] = sampleThickSegment(random, 0.42, 0.88, 0.78, 0.88, 0.065, 0.21, 0);
         } else {
-          // Right bottom serif
-          [x, y, z] = sampleThickSegment(random, 0.38, -0.92, 0.78, -0.92, 0.06, 0.20, 0);
+          [x, y, z] = sampleThickSegment(random, 0.38, -0.92, 0.78, -0.92, 0.065, 0.21, 0);
         }
       }
 
@@ -168,8 +179,8 @@ export function ParticleSculpture({ reducedMotion }: { reducedMotion: boolean })
 function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
   const { size, pointer, camera, gl } = useThree();
   const cores = typeof navigator === 'undefined' ? 4 : navigator.hardwareConcurrency || 4;
-  // Dense crisp granular ice dust for sharp silhouettes + larger faceted edge shards
-  const count = size.width < 768 ? 55000 : size.width < 1440 || cores < 8 ? 140000 : 210000;
+  // Dense crisp granular ice dots with luminous larger crystalline pearls
+  const count = size.width < 768 ? 72000 : size.width < 1440 || cores < 8 ? 185000 : 250000;
 
   const containment = useMemo(() => {
     const cyl = new THREE.CylinderGeometry(2.08, 2.22, 6.4, 28, 12, true);
@@ -243,12 +254,26 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
           vec3 p = (position * weights.x + targetX * weights.y + targetM * weights.z) * 2.0;
           float influence = 0.0;
           float clickGlow = 0.0;
-          float outerSeed = smoothstep(0.62, 1.0, seed);
-          vChunk = pow(seed, 2.05);
+          float outerSeed = smoothstep(0.58, 1.0, seed);
+          vChunk = pow(seed, 1.35);
+
+          // Silky orbital spiral bloom during shape transitions so morphs feel fluid & sculpted
+          float maxW = max(weights.x, max(weights.y, weights.z));
+          float transitionMix = clamp((1.0 - maxW) * 1.48, 0.0, 1.0);
 
           if (motion > 0.5) {
+            if (transitionMix > 0.005) {
+              float arc = sin(transitionMix * 3.14159265);
+              float twistAngle = arc * (1.25 + outerSeed * 1.1) * (seed - 0.5);
+              float ct = cos(twistAngle);
+              float st = sin(twistAngle);
+              p.xz = vec2(p.x * ct - p.z * st, p.x * st + p.z * ct);
+              vec3 outDir = normalize(vec3(p.x, p.y * 0.45, p.z) + vec3(0.001));
+              p += outDir * arc * (0.24 + seed * 0.46);
+            }
+
             // Continuous 3D swirling curl-like flow + rising orbital halo drift
-            float flowSpeed = time * (0.72 + swirlEnergy * 0.45);
+            float flowSpeed = time * (0.78 + swirlEnergy * 0.42);
             vec3 q1 = p * 1.9;
             vec3 q2 = p * 3.6 + vec3(seed * 4.0);
             vec3 flow1 = vec3(
@@ -267,7 +292,7 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
             vec2 orbitDir = vec2(-radialXZ.y, radialXZ.x);
             float orbitWave = sin(time * 0.9 + seed * 12.0 + p.y * 1.5);
 
-            float baseMove = 0.068 + outerSeed * 0.16 + swirlEnergy * 0.18 + pulse * 0.48;
+            float baseMove = 0.052 + outerSeed * 0.14 + swirlEnergy * 0.18 + pulse * 0.42;
             p += (flow1 + flow2 * 0.55) * baseMove;
             p.xz += orbitDir * (outerSeed * 0.14 + swirlEnergy * 0.22 + pulse * 0.35) * (0.65 + 0.35 * orbitWave);
             p.y += outerSeed * 0.075 * sin(time * 1.1 + seed * 19.0);
@@ -276,11 +301,11 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
             if (disturbance > 0.004) {
               vec3 delta = p - cursor;
               float distanceSquared = dot(delta, delta);
-              if (distanceSquared < 4.6) {
+              if (distanceSquared < 4.8) {
                 float distanceToCursor = sqrt(distanceSquared);
-                influence = exp(-distanceSquared * 1.35) * disturbance;
+                influence = exp(-distanceSquared * 1.3) * disturbance;
                 vec3 tangent = normalize(vec3(-delta.y, delta.x, 0.28));
-                p += (delta * inversesqrt(max(distanceSquared, 0.0001)) * 0.38 + tangent * 0.44) * influence;
+                p += (delta * inversesqrt(max(distanceSquared, 0.0001)) * 0.36 + tangent * 0.44) * influence;
                 p.z += sin(distanceToCursor * 14.0 - time * 7.5) * exp(-distanceToCursor * 1.4) * disturbance * 0.11;
               }
             }
@@ -291,45 +316,36 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
               float cDist = length(cDelta);
               vec3 cDir = cDist > 0.001 ? cDelta / cDist : vec3(0.0, 1.0, 0.0);
               vec3 cSwirl = normalize(vec3(-cDir.z, 0.35, cDir.x) + vec3(0.001));
-              float ring = exp(-pow((cDist - clickWave) * 1.65, 2.0));
+              float ring = exp(-pow((cDist - clickWave) * 1.55, 2.0));
               float nearBlast = exp(-cDist * 1.15);
-              float push = (ring * 0.58 + nearBlast * 0.44) * clickBurst * (0.55 + seed * 0.95);
+              float push = (ring * 0.54 + nearBlast * 0.4) * clickBurst * (0.55 + seed * 0.9);
               p += cDir * push + cSwirl * push * 0.65;
-              p.y += push * 0.24;
+              p.y += push * 0.22;
               clickGlow = clamp(ring * 0.9 + nearBlast * 0.85, 0.0, 1.2) * clickBurst;
             }
           }
 
           characterShade = 1.0;
-          if (weights.x > 0.005) {
-            vec3 mascot = position * 2.0;
-            float front = smoothstep(0.2, 0.38, mascot.z);
-            float eyeLeft = 1.0 - smoothstep(0.055, 0.088, length(mascot.xy - vec2(-0.21, 0.82)));
-            float eyeRight = 1.0 - smoothstep(0.055, 0.088, length(mascot.xy - vec2(0.21, 0.82)));
-            float eyes = max(eyeLeft, eyeRight) * front;
-            float belly = (1.0 - smoothstep(0.45, 0.85, length((mascot.xy - vec2(0.0, -0.28)) * vec2(1.5, 0.85)))) * front;
-            characterShade = 1.0 + weights.x * (belly * 0.22 - eyes * 0.78);
-          }
 
-          // Traveling surface highlights across big chunky ice granules
-          float sheen = 0.5 + 0.5 * sin(p.y * 2.6 + p.x * 1.8 - time * 0.85 * motion);
-          sheen = pow(sheen, 4.0);
+          // Traveling surface highlights across luminous crystalline spheres
+          float sheen = 0.5 + 0.5 * sin(p.y * 2.4 + p.x * 1.8 - time * 0.95 * motion);
+          sheen = pow(sheen, 3.2);
 
           vec4 mv = modelViewMatrix * vec4(p, 1.0);
           vec4 mvPosition = mv;
           #include <fog_vertex>
           #ifdef USE_FOG
-            vFogDepth *= 0.65;
+            vFogDepth *= 0.62;
           #endif
           gl_Position = projectionMatrix * mv;
 
-          // Dense crisp core granules (2-5px) + chunky faceted outer ice shards (6-13.5px)
-          float sizeBoost = 0.48 + vChunk * 1.45 + outerSeed * 0.38 + clickGlow * 0.65 + influence * 0.35;
-          gl_PointSize = clamp(pointScale * sizeBoost / max(0.5, -mv.z), 1.6 * pixelRatio, 13.5 * pixelRatio);
+          // Bigger, cleaner optical ice dots across core and outer shards
+          float sizeBoost = 0.92 + vChunk * 1.72 + outerSeed * 0.48 + clickGlow * 0.85 + influence * 0.42 + transitionMix * 0.32;
+          gl_PointSize = clamp(pointScale * sizeBoost / max(0.5, -mv.z), 2.5 * pixelRatio, 17.5 * pixelRatio);
 
-          vec3 surfaceNormal = normalize(vec3(p.x / 0.66, (p.y > 0.35 ? (p.y - 0.72) / 0.56 : (p.y + 0.3) / 0.87), p.z / 0.5) + vec3(0.001));
-          float formLight = 0.28 + max(0.0, dot(surfaceNormal, normalize(vec3(-0.6, 0.78, 0.48)))) * 0.78;
-          brightness = (0.34 + seed * 0.16 + p.y * 0.08 + sheen * 0.36) * formLight + pulse * 0.24 + influence * 0.42 + clickGlow * 0.55;
+          vec3 surfaceNormal = normalize(vec3(p.x * 0.92, p.y * 0.72, p.z * 1.15) + vec3(0.001));
+          float formLight = 0.44 + max(0.0, dot(surfaceNormal, normalize(vec3(-0.55, 0.78, 0.55)))) * 0.68;
+          brightness = (0.48 + seed * 0.16 + p.y * 0.06 + sheen * 0.34) * formLight + pulse * 0.28 + influence * 0.45 + clickGlow * 0.6 + transitionMix * 0.22;
         }
       `,
       fragmentShader: `
@@ -340,24 +356,24 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
         #include <fog_pars_fragment>
         void main() {
           vec2 uv = gl_PointCoord * 2.0 - 1.0;
-          // Faceted crystalline ice shards on larger chunks, rounded granules on core particles
+          // Faceted crystalline ice shards on larger chunks, smooth luminous pearls on core dots
           float roundR = dot(uv, uv);
           float facetR = max(abs(uv.x), abs(uv.y)) * 0.86 + (abs(uv.x) + abs(uv.y)) * 0.22;
-          float shapeR = mix(roundR, facetR * facetR, smoothstep(0.45, 0.92, vChunk) * 0.55);
+          float shapeR = mix(roundR, facetR * facetR, smoothstep(0.52, 0.96, vChunk) * 0.42);
           if (shapeR > 1.0) discard;
 
           float sphere = sqrt(max(0.0, 1.0 - roundR));
-          vec3 normal = normalize(vec3(uv, sphere + 0.12));
-          float diffuse = max(0.0, dot(normal, normalize(vec3(-0.55, 0.75, 0.85))));
-          float rim = pow(1.0 - sphere, 2.0) * 0.24;
-          float highlight = pow(max(0.0, dot(normal, normalize(vec3(-0.35, 0.58, 1.0)))), 20.0);
-          float light = 0.32 + diffuse * 0.52 + rim + highlight * 0.34;
+          vec3 normal = normalize(vec3(uv, sphere + 0.18));
+          float diffuse = max(0.0, dot(normal, normalize(vec3(-0.5, 0.75, 0.9))));
+          float rim = pow(1.0 - sphere, 1.85) * 0.32;
+          float highlight = pow(max(0.0, dot(normal, normalize(vec3(-0.35, 0.58, 1.0)))), 18.0);
+          float light = 0.42 + diffuse * 0.54 + rim + highlight * 0.38;
 
-          vec3 shadowTone = vec3(0.42, 0.48, 0.56);
-          vec3 litTone = vec3(0.92, 0.96, 1.0);
-          vec3 iceTone = mix(shadowTone, litTone, clamp(brightness * 0.68 + highlight * 0.6, 0.0, 1.0));
-          float edgeAlpha = 1.0 - smoothstep(0.74, 1.0, shapeR);
-          gl_FragColor = vec4(iceTone * (brightness + 0.24) * light * characterShade, edgeAlpha * reveal);
+          vec3 shadowTone = vec3(0.56, 0.65, 0.76);
+          vec3 litTone = vec3(0.98, 0.995, 1.0);
+          vec3 iceTone = mix(shadowTone, litTone, clamp(brightness * 0.72 + highlight * 0.65, 0.0, 1.0));
+          float edgeAlpha = 1.0 - smoothstep(0.64, 1.0, shapeR);
+          gl_FragColor = vec4(iceTone * (brightness + 0.32) * light * characterShade, edgeAlpha * reveal);
           #include <fog_fragment>
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -424,14 +440,21 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
       plane.setFromNormalAndCoplanarPoint(camForward, worldCenter);
       ray.setFromCamera(pointerWorldNdc.current, camera);
 
+      let clickedOnDots = false;
       if (ray.ray.intersectPlane(plane, local)) {
         group.current.worldToLocal(local);
+        clickedOnDots = local.length() < 2.65;
         local.x = THREE.MathUtils.clamp(local.x, -1.6, 1.6);
         local.y = THREE.MathUtils.clamp(local.y, -1.6, 1.6);
         local.z = THREE.MathUtils.clamp(local.z, -1.2, 1.2);
         system.material.uniforms.clickPos.value.copy(local);
       } else {
         system.material.uniforms.clickPos.value.set(0, 0, 0);
+      }
+
+      if (clickedOnDots) {
+        setSocialSelection(selection.index + 1);
+        soundController.playSelectorClick(1);
       }
 
       clickBurst.current = Math.min(1.8, clickBurst.current + 1.0);
@@ -513,9 +536,9 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
 
     const uniforms = system.material.uniforms;
     const weights = uniforms.weights.value as THREE.Vector3;
-    weights.x = THREE.MathUtils.damp(weights.x, selection.index === 0 ? 1 : 0, 3.8, dt);
-    weights.y = THREE.MathUtils.damp(weights.y, selection.index === 1 ? 1 : 0, 3.8, dt);
-    weights.z = THREE.MathUtils.damp(weights.z, selection.index === 2 ? 1 : 0, 3.8, dt);
+    weights.x = THREE.MathUtils.damp(weights.x, selection.index === 0 ? 1 : 0, 4.6, dt);
+    weights.y = THREE.MathUtils.damp(weights.y, selection.index === 1 ? 1 : 0, 4.6, dt);
+    weights.z = THREE.MathUtils.damp(weights.z, selection.index === 2 ? 1 : 0, 4.6, dt);
 
     group.current.position.y = SCULPTURE_POSITION[1] + loopDissolve * 2.2;
     group.current.rotation.y = reducedMotion ? 0 : Math.sin(elapsed.current * 0.24) * 0.24 + loopDissolve * 0.9;
@@ -536,7 +559,7 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
       if (ray.ray.intersectPlane(plane, local)) {
         group.current.worldToLocal(local);
         uniforms.cursor.value.copy(local);
-        const overSculpture = local.length() < 1.85 && scrollDirector.stateName === 'particle-stage';
+        const overSculpture = local.length() < 2.25 && scrollDirector.stateName === 'particle-stage';
         if (overSculpture !== wasHoveredRef.current) {
           wasHoveredRef.current = overSculpture;
           heroStore.setState({ pointerInteractive: overSculpture });
@@ -562,7 +585,7 @@ function SculptureSimulation({ reducedMotion }: { reducedMotion: boolean }) {
     uniforms.swirlEnergy.value = reducedMotion ? 0 : Math.max(swirlEnergy.current, loopDissolve * 1.35);
     const dpr = gl.getPixelRatio();
     uniforms.pixelRatio.value = dpr;
-    uniforms.pointScale.value = size.height * dpr * 0.028;
+    uniforms.pointScale.value = size.height * dpr * 0.044;
     uniforms.reveal.value = reveal;
   });
 

@@ -177,7 +177,7 @@ export function IceCrystalObject({
 
   return (
     <group ref={rootRef} position={[position[0], position[1], position[2]]}>
-      <group ref={spinGroupRef} scale={0.86}>
+      <group ref={spinGroupRef} scale={0.68}>
         {/* Embedded 3D sculpture inside the ice */}
         <group>{children}</group>
 

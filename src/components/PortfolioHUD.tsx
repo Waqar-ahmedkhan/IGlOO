@@ -71,13 +71,13 @@ export function PortfolioHUD() {
       }
 
       if (tlLabelRef.current) {
-        tlLabelRef.current.style.transform = `translate3d(${proj.topLeftEndX.toFixed(1)}px, ${(proj.topLeftEndY - 34).toFixed(1)}px, 0)`;
+        tlLabelRef.current.style.transform = `translate3d(${proj.topLeftEndX.toFixed(1)}px, ${(proj.topLeftEndY - 46).toFixed(1)}px, 0)`;
       }
       if (trLabelRef.current) {
-        trLabelRef.current.style.transform = `translate3d(${proj.topRightX.toFixed(1)}px, ${(proj.topRightY - 14).toFixed(1)}px, 0)`;
+        trLabelRef.current.style.transform = `translate3d(${proj.topRightX.toFixed(1)}px, ${(proj.topRightY - 22).toFixed(1)}px, 0)`;
       }
       if (brLabelRef.current) {
-        brLabelRef.current.style.transform = `translate3d(${proj.bottomRightEndX.toFixed(1)}px, ${(proj.bottomRightEndY - 34).toFixed(1)}px, 0) translateX(-100%)`;
+        brLabelRef.current.style.transform = `translate3d(${proj.bottomRightEndX.toFixed(1)}px, ${(proj.bottomRightEndY - 58).toFixed(1)}px, 0) translateX(-100%)`;
       }
     };
 
